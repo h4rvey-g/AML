@@ -1,6 +1,7 @@
 library(targets)
 library(crew)
 source("code/R/101.load_data.R")
+source("code/R/102.cluster_annotate.R")
 tar_option_set(
     tidy_eval = FALSE,
     packages <- c(
@@ -15,6 +16,8 @@ tar_config_set(
     store = "data/_targets"
 )
 list(
-    tar_target(sc_raw_list, load_sc()),
-    tar_target(sc_int, process_sc(sc_raw_list))
+    tar_target(sc_raw, load_sc()),
+    tar_target(sc_int, process_sc(sc_raw)),
+    tar_target(sc_cluster, cluster_data(sc_int)),
+    tar_target(sc_annotate, annotate_data(sc_cluster))
 )

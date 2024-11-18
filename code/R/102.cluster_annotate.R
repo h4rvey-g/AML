@@ -1,7 +1,89 @@
 cluster_data <- function(sc_int) {
-    sc_int <- FindClusters(sc_int, resolution = 0.3)
-    p <- DimPlot2(sc_int, reduction = "umap_integrated", group.by = c("seurat_clusters", "group")) +
+    sc_int <- sc_int %>%
+        FindNeighbors(dims = 1:30, reduction = "harmony") %>%
+        FindClusters(resolution = 0.2)
+    p <- DimPlot2(sc_int, reduction = "umap_integrated", group.by = "seurat_clusters", label = TRUE) +
         theme(plot.background = element_rect(fill = "white"))
-    ggsave("results/102.cluster_annotate/umap_integrated.png", p, width = 14, height = 7)
+    ggsave("results/102.cluster_annotate/cluster.png", p, width = 7, height = 7)
+    sc_int
+}
+
+annotate_data <- function(sc_int) {
+    markers <- list(
+        "Steroidogenic" = c("NR5A1", "CYP11A1", "CYP11B2", "HSD3B2", "CYP17A1", "CYP21A2"),
+        "ZG" = c("DACH1", "VSNL1"),
+        "ZG/ZF" = c("CCN3", "NCAM1"),
+        "ZF" = c("CYP11B1", "ABCB1"),
+        "ZR" = c("CYB5A", "SULT2A1"),
+        "Cap" = c("NR2F2", "RSPO3", "SPARCL1", "COL1A1", "COL1A2"),
+        "Med" = c("TH", "CHGA", "CHGB"),
+        "Endo" = c("PECAM1", "EMCN", "PLVAP"),
+        "Fib" = c("LUM", "PDGFRA", "ACTA2", "TAGLN", "MGP"),
+        "VSM" = c("ACTA2", "MYH11"),
+        "Adipo" = c("ADIPOQ", "CD34", "FABP4", "ICAM1", "THY1"),
+        "Mac" = c("CD68", "CSF1R", "C1QA", "C1QC"),
+        "Tcell" = c("CD4", "TRBC1", "CD3D", "CD3E", "CD3G", "TRBC2", "CD8A"),
+        "Bcell" = c("CD19", "MS4A1", "MS4A1", "CD79A", "CD79B"),
+        "Plasma" = c("CD38", "SDC1", "MZB1", "IGHA1", "IGHG1"),
+        "Granul" = c("S100A8", "CCR3", "CD33", "IL5RA", "S100A9", "CSF3R")
+    )
+    #     marker_genes <- c(
+    #     "CD19", "CD20", "MS4A1", "CD79A", "CD79B", # B cell
+    #     "CD3D", "CD3E", "CD3G", "CD3", "TRBC2", # T cell
+    #     "NKG7", "KLRD1", "KLRF1", "GNLY", "NCR1", # NK cell
+    #     "PECAM1", "CD34", "CD31", "KDR", # endothelial cell
+    #     "MZB1", "IGHA1", "IGHG1", # plasma cell
+    #     "CD14", "CD16", "LYZ", # monocyte
+    #     "CD68", "C1QA", # macrophage
+    #     "CD1C", "CLEC4C", "IRF8", # dendritic cell
+    #     "CCR3", "CD33", "IL5RA", "S100A9", "CSF3R", # Granulocyte
+    #     "TPSB2", "TPSAB1", "MS4A2", # Mast cell
+    #     "ACTA2", "COL1A1", "COL1A2", "TAGLN", # Fibroblast
+    #     "PDZK1IP1", "LRP2", "ALDOB", # proximal tubule cell
+    #     "SLC4A4", "SLC5A12", "SLC22A19", # kidney cell
+    #     "CA9", "NDUFA4L2", "VEGFA" # RCC cell
+    # )
+    toplot <- CalcStats(sc_int,
+        features = markers %>% unlist(),
+        method = "zscore", order = "value"
+    )
+    # see which is in markers but not in rownames(toplot)
+    missing_genes <- setdiff(markers %>% unlist(), rownames(toplot))
+    # remove missing genes in each element of markers
+    markers_after <- markers %>% map(~ .x[.x %in% rownames(toplot)])
+    gene_groups <- rep(names(markers_after), lengths(markers_after)) %>%
+        setNames(markers_after %>% unlist())
+    # order gene_groups by rownames(toplot)
+    gene_groups <- gene_groups[rownames(toplot)]
+    p1 <- Heatmap(toplot, lab_fill = "zscore", facet_row = gene_groups) +
+        theme(plot.background = element_rect(fill = "white"))
+    ggsave("results/102.cluster_annotate/heatmap_zscore.png", p1, width = 7, height = 7)
+
+    toplot <- CalcStats(sc_int,
+        features = markers %>% unlist(),
+        method = "logFC", order = "value", exp.transform = TRUE
+    )
+    # see which is in markers but not in rownames(toplot)
+    missing_genes <- setdiff(markers %>% unlist(), rownames(toplot))
+    # remove missing genes in each element of markers
+    markers_after <- markers %>% map(~ .x[.x %in% rownames(toplot)])
+    gene_groups <- rep(names(markers_after), lengths(markers_after)) %>%
+        setNames(markers_after %>% unlist())
+    # order gene_groups by rownames(toplot)
+    gene_groups <- gene_groups[rownames(toplot)]
+    p2 <- Heatmap(toplot, lab_fill = "logFC", facet_row = gene_groups) +
+        theme(plot.background = element_rect(fill = "white"))
+    ggsave("results/102.cluster_annotate/heatmap_logFC.png", p2, width = 7, height = 7)
+
+    p3 <- DimPlot2(sc_int, reduction = "umap_integrated", group.by = "seurat_clusters", label = TRUE) +
+        theme(plot.background = element_rect(fill = "white"))
+
+    p <- (p1 + p2) / p3
+    ggsave("results/102.cluster_annotate/heatmap.png", p, width = 14, height = 19)
+
+    cell_type <- read_tsv("results/102.cluster_annotate/cell_type.tsv") %>%
+        mutate(cluster = factor(cluster))
+    sc_int <- sc_int %>%
+        left_join(cell_type, by = c("seurat_clusters" = "cluster"))
     sc_int
 }
