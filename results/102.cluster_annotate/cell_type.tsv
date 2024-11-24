@@ -1,15 +1,16 @@
-cluster	cell_type
-0	Steroidogenic
-1	Steroidogenic
-2	Mac/Granul
-3	Tcell
-4	Endo
-5	Fib-Cap-Adipo
-6	Bcell
-7	Med
-8	Fib-Cap-Adipo
-9	Fib-Cap-Adipo
-10	Fib-Cap-Adipo
-11	Mac/Granul
-12	Plasma
-13	Unknown
+cluster	cell_type	cell_type_dtl
+0	Steroidogenic	Steroidogenic
+1	Steroidogenic	Steroidogenic
+2	Mac/Granul	Mac/Granul
+3	Tcell	Tcell
+4	Endo	Endo
+5	Fib-Cap-Adipo	Fib
+6	Fib-Cap-Adipo	Cap
+7	Bcell	Bcell
+8	Fib-Cap-Adipo	Adipo
+9	Med	Med
+10	Unknown	Unknown
+11	Plasma	Plasma
+12	Unknown	Unknown
+13	Plasma	Plasma
+14	Steroidogenic	Steroidogenic

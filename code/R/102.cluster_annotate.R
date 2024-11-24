@@ -8,7 +8,7 @@ cluster_data <- function(sc_int) {
     sc_int
 }
 
-annotate_data <- function(sc_int) {
+annotate_data <- function(sc_int, cell_type_path) {
     markers <- list(
         "Steroidogenic" = c("NR5A1", "CYP11A1", "CYP11B2", "HSD3B2", "CYP17A1", "CYP21A2"),
         "ZG" = c("DACH1", "VSNL1"),
@@ -81,9 +81,17 @@ annotate_data <- function(sc_int) {
     p <- (p1 + p2) / p3
     ggsave("results/102.cluster_annotate/heatmap.png", p, width = 14, height = 19)
 
-    cell_type <- read_tsv("results/102.cluster_annotate/cell_type.tsv") %>%
+    cell_type <- read_tsv(cell_type_path) %>%
         mutate(cluster = factor(cluster))
     sc_int <- sc_int %>%
         left_join(cell_type, by = c("seurat_clusters" = "cluster"))
     sc_int
+}
+
+save_annotate <- function(sc_annotate) {
+    scCustomize::as.anndata(
+        x = sc_annotate, file_path = "data/104.RNA_velocity", file_name = "anndata.h5ad",
+        main_layer = "counts", other_layers = c("data")
+    )
+    "data/104.RNA_velocity/anndata.h5ad"
 }

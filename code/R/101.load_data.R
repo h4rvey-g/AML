@@ -1,7 +1,8 @@
 load_sc <- function() {
     samples <- c("N1", "N2", "N4", "T1", "T2", "T4")
-    sc_raw_list <- imap(samples, ~ Read10X(paste0("data/102.expr_data/", .x), gene.column = 1))
+    sc_raw_list <- imap(samples, ~ Read10X(paste0("data/103.self_workflow/", .x, "/output/filter_matrix"), gene.column = 1))
     names(sc_raw_list) <- samples
+    ""
     sc_raw <- createLiger(sc_raw_list)
     sc_raw
 }
