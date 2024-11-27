@@ -49,3 +49,63 @@ DEG_annotation <- function(sc_annotate) {
     }
     "results/103.DEG"
 }
+
+run_GSEA <- function(sc_final) {
+    options(max.print = 12, spe = "human")
+    parents <- GeneSetAnalysisGO() %>% names()
+    # run analysis on every parent category
+    for (parent in parents) {
+        cat("Running GSEA for", parent, "\n")
+        sc_final <- GeneSetAnalysisGO(sc_final, nCores = 50, parent = parent)
+        matr <- sc_final@misc$AUCell$GO[[parent]]
+        matr <- RenameGO(matr, add_id = FALSE)
+        p <- Heatmap(
+            CalcStats(matr, f = sc_final$cell_type_dtl, method = "zscore", order = "p", n = 10),
+            lab_fill = "zscore"
+        )
+        ggsave(paste0("results/104.GSEA/Heatmap_GO_", parent, ".png"), p, width = 30, height = 30)
+        # create a new column in sc_final, the combination of cell_type_dtl and group
+        sc_final$cell_type_group <- paste(sc_final$cell_type_dtl, sc_final$group, sep = "_")
+        # run WaterfallPlot for each cell type between tumor and normal
+        cell_types <- unique(sc_final$cell_type_dtl)
+        Idents(sc_final) <- "cell_type_group"
+        for (cell_type in cell_types) {
+            ident1 <- paste0(cell_type, "_tumor")
+            ident2 <- paste0(cell_type, "_normal")
+            if (!(ident1 %in% Idents(sc_final) && ident2 %in% Idents(sc_final))) {
+                next
+            }
+            p <- WaterfallPlot(
+                matr,
+                f = sc_final$cell_type_group,
+                ident.1 = ident1,
+                ident.2 = ident2,
+                top.n = 20
+            )
+            ggsave(paste0("results/104.GSEA/Waterfall_GO_", parent, "_", gsub("/", "_", cell_type), ".png"), p, width = 15, height = 15)
+        }
+    }
+    sc_final <- GeneSetAnalysis(sc_final, genesets = hall50$human, nCores = 30)
+    matr <- sc_final@misc$AUCell$genesets
+    p <- Heatmap(CalcStats(matr, f = sc_final$cell_type_dtl, method = "zscore", order = "p", n = 10), lab_fill = "zscore")
+    ggsave("results/104.GSEA/Heatmap_hallmark50.png", p, width = 14, height = 14)
+    sc_final$cell_type_group <- paste(sc_final$cell_type_dtl, sc_final$group, sep = "_")
+    cell_types <- unique(sc_final$cell_type_dtl)
+    Idents(sc_final) <- "cell_type_group"
+    for (cell_type in cell_types) {
+        ident1 <- paste0(cell_type, "_tumor")
+        ident2 <- paste0(cell_type, "_normal")
+        if (!(ident1 %in% Idents(sc_final) && ident2 %in% Idents(sc_final))) {
+            next
+        }
+        p <- WaterfallPlot(
+            matr,
+            f = sc_final$cell_type_group,
+            ident.1 = ident1,
+            ident.2 = ident2,
+            top.n = 20
+        )
+        ggsave(paste0("results/104.GSEA/Waterfall_hallmark50_", gsub("/", "_", cell_type), ".png"), p, width = 15, height = 15)
+    }
+    "results/104.GSEA"
+}

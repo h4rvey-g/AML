@@ -25,5 +25,6 @@ list(
     tar_target(sc_sub_stero, sub_cluster_steroidogenic(sc_annotate)),
     tar_target(sc_final, final_annotation(sc_annotate, sc_sub_stero)),
     # tar_target(anndata, save_annotate(sc_final)),
-    tar_target(DEG_path, DEG_annotation(sc_final), format = "file")
+    tar_target(DEG_path, DEG_annotation(sc_final), format = "file"),
+    tar_target(GSEA_path, run_GSEA(sc_final), format = "file")
 )
