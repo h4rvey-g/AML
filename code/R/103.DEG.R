@@ -109,3 +109,34 @@ run_GSEA <- function(sc_final) {
     }
     "results/104.GSEA"
 }
+
+plot_distribution <- function(sc_final) {
+    p1 <- ClusterDistrBar(origin = sc_final$orig.ident, cluster = sc_final$cell_type_dtl)
+    p2 <- ClusterDistrBar(origin = sc_final$group, cluster = sc_final$cell_type_dtl)
+    p <- wrap_plots(list(p1, p2), nrow = 2, heights = c(4, 1))
+    ggsave("results/105.Distribution/ClusterDistrBar.png", p, width = 10, height = 13)
+    p1 <- ClusterDistrBar(origin = sc_final$orig.ident, cluster = sc_final$cell_type_dtl, rev = TRUE, normalize = TRUE)
+    p2 <- ClusterDistrBar(origin = sc_final$group, cluster = sc_final$cell_type_dtl, rev = TRUE, normalize = TRUE)
+    p <- wrap_plots(list(p1, p2), nrow = 2, heights = c(4, 1))
+    ggsave("results/105.Distribution/ClusterDistrBar_rev.png", p, width = 10, height = 13)
+
+    df1 <- ClusterDistrBar(origin = sc_final$orig.ident, cluster = sc_final$cell_type_dtl, plot = FALSE) %>%
+        as.data.frame() %>%
+        rownames_to_column("cluster") %>%
+        pivot_longer(-cluster, names_to = "origin", values_to = "percentage")
+    p1 <- tidyplot(df1, x = origin, y = percentage, color = cluster) %>%
+        add_areastack_absolute() %>%
+        adjust_colors(c(colors_discrete_metro, colors_discrete_seaside))
+    df2 <- ClusterDistrBar(origin = sc_final$group, cluster = sc_final$cell_type_dtl, plot = FALSE) %>%
+        as.data.frame() %>%
+        rownames_to_column("cluster") %>%
+        pivot_longer(-cluster, names_to = "origin", values_to = "percentage")
+    p2 <- tidyplot(df2, x = origin, y = percentage, color = cluster) %>%
+        add_areastack_absolute() %>%
+        adjust_colors(c(colors_discrete_metro, colors_discrete_seaside))
+    p <- wrap_plots(list(p1, p2), nrow = 1)
+    save_plot(p, "results/105.Distribution/ClusterDistrBar_area.png")
+    # combine df1 and df2 in one excel, two sheets
+    writexl::write_xlsx(list(df1 = df1, df2 = df2), "results/105.Distribution/ClusterDistr.xlsx")
+    "results/105.Distribution"
+}

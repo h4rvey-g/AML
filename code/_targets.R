@@ -6,7 +6,7 @@ source("code/R/103.DEG.R")
 tar_option_set(
     tidy_eval = FALSE,
     packages <- c(
-        "tidyverse", "rliger", "Seurat", "SeuratExtend", "tidyseurat", "scCustomize"
+        "tidyverse", "rliger", "Seurat", "SeuratExtend", "tidyseurat", "scCustomize", "patchwork", "tidyplots"
     ),
     controller = crew_controller_local(workers = 20, seconds_timeout = 6000),
     format = "qs",
@@ -26,5 +26,6 @@ list(
     tar_target(sc_final, final_annotation(sc_annotate, sc_sub_stero)),
     # tar_target(anndata, save_annotate(sc_final)),
     tar_target(DEG_path, DEG_annotation(sc_final), format = "file"),
-    tar_target(GSEA_path, run_GSEA(sc_final), format = "file")
+    tar_target(GSEA_path, run_GSEA(sc_final), format = "file"),
+    tar_target(distribution_path, plot_distribution(sc_final), format = "file")
 )
