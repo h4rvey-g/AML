@@ -16,6 +16,7 @@ tar_config_set(
     script = "code/_targets.R",
     store = "data/_targets"
 )
+options(max.print = 12, spe = "human")
 list(
     tar_target(sc_raw, load_sc()),
     tar_target(sc_int, process_sc(sc_raw)),
@@ -27,5 +28,20 @@ list(
     # tar_target(anndata, save_annotate(sc_final)),
     tar_target(DEG_path, DEG_annotation(sc_final), format = "file"),
     tar_target(GSEA_path, run_GSEA(sc_final), format = "file"),
-    tar_target(distribution_path, plot_distribution(sc_final), format = "file")
+    tar_target(distribution_path, plot_distribution(sc_final), format = "file"),
+    tar_target(parents, {
+        options(max.print = 12, spe = "human")
+        GeneSetAnalysisGO() %>% names()
+    }),
+    tar_target(
+        sc_filtered,
+        sc_final %>% filter(cell_type == "Fib-Cap-Adipo")
+    ),
+    tar_target(GSEA_Fib_Cap_Adipo_path, run_GSEA_Fib_Cap_Adipo(sc_filtered, parents),
+        format = "file",
+        pattern = map(parents)
+    ),
+    tar_target(GSEA_Fib_Cap_Adipo_hallmark_path, compare_cell_types_hallmark50(sc_filtered),
+        format = "file"
+    )
 )
