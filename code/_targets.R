@@ -43,5 +43,8 @@ list(
     ),
     tar_target(GSEA_Fib_Cap_Adipo_hallmark_path, compare_cell_types_hallmark50(sc_filtered),
         format = "file"
+    ),
+    tar_target(calculate_DEG_mCAF_vs_Others_path, calculate_DEG_mCAF_vs_Others(sc_filtered),
+        format = "file"
     )
 )

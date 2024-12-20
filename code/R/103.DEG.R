@@ -219,6 +219,33 @@ plot_distribution <- function(sc_final) {
     "results/105.Distribution"
 }
 
+calculate_DEG_mCAF_vs_Others <- function(sc_filtered) {
+    sc_pseudo <- AggregateExpression(sc_filtered, assays = "RNA", return.seurat = T, group.by = c("group", "dataset", "cell_type_dtl"))
+    sc_pseudo$cell_type_group <- paste(sc_pseudo$cell_type_dtl, sc_pseudo$group, sep = "_")
+    Idents(sc_pseudo) <- "cell_type_group"
+    comparisons <- list(c("mCAF_tumor", "Fib_normal"), c("mCAF_tumor", "MSC_normal"))
+    for (comp in comparisons) {
+        ident1 <- comp[1]
+        ident2 <- comp[2]
+        deg <- FindMarkers(
+            sc_pseudo,
+            ident.1 = ident1,
+            ident.2 = ident2,
+            test.use = "DESeq2",
+            min.cells.group = 2
+        ) %>%
+            Add_Pct_Diff() %>%
+            rownames_to_column("gene") %>%
+            as_tibble() %>%
+            filter(p_val_adj < 0.05) %>%
+            arrange(desc(abs(avg_log2FC)))
+        write_tsv(
+            deg,
+            paste0("results/103.DEG/DEG_", ident1, "_vs_", ident2, ".tsv")
+        )
+    }
+}
+
 # sc_final_filt <- sc_final %>%
 #     filter(seurat_clusters %in% c(11, 13))
 # df1 <- ClusterDistrBar(origin = sc_final_filt$orig.ident, cluster = sc_final_filt$seurat_clusters, plot = FALSE) %>%
