@@ -27,7 +27,7 @@ annotate_data <- function(sc_int, cell_type_path) {
         "Endo" = c("PECAM1", "EMCN", "PLVAP", "CDH5", "KDR"),
         "Fib" = c("LUM", "TAGLN", "MGP", "AIFM2", "S100A4", "FAP"),
         "mCAFs" = c("COL1A1", "COL1A2", "COL3A1", "POSTN", "TNC", "NT5E", "THY1", "ENG", "MCAM"),
-        "ASC_preadipocyte" = c("PPARG", "LPL", "CD36", "PDGFRA", "PDGFRB", "LEP"),
+        "MSC" = c("CD105", "NES", "CD106", "STRIP1", "MFAP5", "KLF5", "EFNA5", "EMILIN3"),
         # "Fib_2_bd" = c("CCL19", "APOE", "CXCL2", "CXCL3", "EFEMP1"),
         # "Fib_3_gd" = c("LUM", "PDGFRA", "TAGLN", "MGP", "AIFM2", "S100A4", "FAP"),
         "Adipo" = c("ADIPOQ", "CD34", "FABP4", "ICAM1"),
@@ -166,6 +166,44 @@ final_annotation <- function(sc_int, sc_sub_stero) {
     p <- DimPlot2(sc_int, reduction = "umap_integrated", group.by = "cell_type_dtl", label = TRUE) +
         theme(plot.background = element_rect(fill = "white"))
     ggsave("results/102.cluster_annotate/final_annotation.png", p, width = 7, height = 7)
+    markers <- list(
+        "Steroidogenic" = c("NR5A1", "CYP11A1", "CYP11B2", "HSD3B2", "CYP17A1", "CYP21A2"),
+        "ZG" = c("DACH1", "VSNL1"),
+        "ZG/ZF" = c("CCN3", "NCAM1"),
+        "ZF" = c("CYP11B1", "ABCB1"),
+        "ZR" = c("CYB5A", "SULT2A1"),
+        # "Cap" = c("NR2F2", "RSPO3", "SPARCL1", "COL1A1", "COL1A2"),
+        "Med" = c("TH", "CHGA", "CHGB", "KIT"),
+        "Endo" = c("PECAM1", "EMCN", "PLVAP", "CDH5", "KDR"),
+        "Fib" = c("LUM", "TAGLN", "MGP", "AIFM2", "S100A4", "FAP"),
+        "mCAFs" = c("COL1A1", "COL1A2", "COL3A1", "POSTN", "TNC", "NT5E", "THY1", "ENG", "MCAM"),
+        "MSC" = c("CD105", "NES", "CD106", "STRIP1", "MFAP5", "KLF5", "EFNA5", "EMILIN3"),
+        # "Fib_2_bd" = c("CCL19", "APOE", "CXCL2", "CXCL3", "EFEMP1"),
+        # "Fib_3_gd" = c("LUM", "PDGFRA", "TAGLN", "MGP", "AIFM2", "S100A4", "FAP"),
+        "Adipo" = c("ADIPOQ", "CD34", "FABP4", "ICAM1"),
+        "Mac" = c("CD68", "CSF1R", "C1QA", "C1QC"),
+        "Tcell" = c("CD4", "TRBC1", "CD3D", "CD3E", "CD3G", "TRBC2", "CD8A"),
+        "Bcell" = c("CD19", "MS4A1", "CD79A", "CD79B"),
+        "Plasma" = c("CD38", "SDC1", "MZB1", "IGHA1", "IGHG1"),
+        "Granul" = c("S100A8", "CCR3", "CD33", "IL5RA", "S100A9", "CSF3R"),
+        "LEC" = c("PDPN", "PROX1", "LYVE1", "CCL21"),
+        "Eryth" = c("HBB", "GYPA", "SLC4A1", "ALAS2")
+    )
+    toplot <- CalcStats(sc_int,
+        features = markers %>% unlist(), group.by = "cell_type_dtl",
+        method = "zscore", order = "value"
+    )
+    # see which is in markers but not in rownames(toplot)
+    missing_genes <- setdiff(markers %>% unlist(), rownames(toplot))
+    # remove missing genes in each element of markers
+    markers_after <- markers %>% map(~ .x[.x %in% rownames(toplot)])
+    gene_groups <- rep(names(markers_after), lengths(markers_after)) %>%
+        setNames(markers_after %>% unlist())
+    # order gene_groups by rownames(toplot)
+    gene_groups <- gene_groups[rownames(toplot)]
+    p <- Heatmap(toplot, lab_fill = "zscore", facet_row = gene_groups) +
+        theme(plot.background = element_rect(fill = "white"))
+    ggsave("results/102.cluster_annotate/final_annotation_heatmap_zscore.png", p, width = 7, height = 14)
     sc_int
 }
 
@@ -181,18 +219,20 @@ find_DEGs_pseudo_bulk <- function(sc_final) {
     # 聚合表达数据
     # sc_pseudo <- AggregateExpression(sc_final, assays = "RNA", return.seurat = TRUE, group.by = c("group", "dataset", "cell_type_dtl"))
     # Idents(sc_pseudo) <- "cell_type_dtl"
-    cell_types <- c("11", "13")
+    cell_types <- sc_final$cell_type_dtl %>% unique()
 
     # 创建目录
     dir.create("results/102.cluster_annotate/cell_types_DEG/normal", showWarnings = FALSE, recursive = TRUE)
     dir.create("results/102.cluster_annotate/cell_types_DEG/tumor", showWarnings = FALSE, recursive = TRUE)
 
-    for (group_1 in c("normal", "tumor")) {
-        sc_final_sub <- sc_final %>%
-            filter(group == group_1)
-        sc_pseudo <- AggregateExpression(sc_final_sub, assays = "RNA", return.seurat = TRUE, group.by = c("dataset", "seurat_clusters"))
-        Idents(sc_pseudo) <- "seurat_clusters"
-        cell_type <- ifelse(group_1 == "normal", "11", "13")
+    for (cell_type in cell_types) {
+        if (cell_type == "MSC") {
+            sc_final_sub <- sc_final %>% filter(group == "normal")
+        } else {
+            sc_final_sub <- sc_final
+        }
+        sc_pseudo <- AggregateExpression(sc_final_sub, assays = "RNA", return.seurat = TRUE, group.by = c("dataset", "cell_type_dtl"))
+        Idents(sc_pseudo) <- "cell_type_dtl"
         deg <- FindMarkers(
             sc_pseudo,
             ident.1 = cell_type,
@@ -204,23 +244,23 @@ find_DEGs_pseudo_bulk <- function(sc_final) {
             as_tibble() %>%
             filter(p_val_adj < 0.05) %>%
             arrange(desc(abs(avg_log2FC)))
-        write_tsv(deg, paste0("results/102.cluster_annotate/cell_types_DEG/", group_1, "/DEG_", gsub("/", "_", cell_type), ".tsv"))
+        write_tsv(deg, paste0("results/102.cluster_annotate/cell_types_DEG/", gsub("/", "_", cell_type), "_DEG.tsv"))
     }
-    sc_pseudo <- AggregateExpression(sc_final, assays = "RNA", return.seurat = TRUE, group.by = c("dataset", "cell_type_dtl"))
-    Idents(sc_pseudo) <- "cell_type_dtl"
-    deg <- FindMarkers(
-        sc_pseudo,
-        ident.1 = "mCAF",
-        ident.2 = "MSC",
-        test.use = "DESeq2",
-        min.cells.group = 2
-    ) %>%
-        # Add_Pct_Diff() %>%
-        rownames_to_column("gene") %>%
-        as_tibble() %>%
-        filter(p_val_adj < 0.05) %>%
-        arrange(desc(abs(avg_log2FC)))
-    write_tsv(deg, paste0("results/102.cluster_annotate/cell_types_DEG/Fib_Cap_DEG.tsv"))
+    # sc_pseudo <- AggregateExpression(sc_final, assays = "RNA", return.seurat = TRUE, group.by = c("dataset", "cell_type_dtl"))
+    # Idents(sc_pseudo) <- "cell_type_dtl"
+    # deg <- FindMarkers(
+    #     sc_pseudo,
+    #     ident.1 = "mCAF",
+    #     ident.2 = "MSC",
+    #     test.use = "DESeq2",
+    #     min.cells.group = 2
+    # ) %>%
+    #     # Add_Pct_Diff() %>%
+    #     rownames_to_column("gene") %>%
+    #     as_tibble() %>%
+    #     filter(p_val_adj < 0.05) %>%
+    #     arrange(desc(abs(avg_log2FC)))
+    # write_tsv(deg, paste0("results/102.cluster_annotate/cell_types_DEG/Fib_Cap_DEG.tsv"))
 }
 
 # 示例调用
