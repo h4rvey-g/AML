@@ -10,7 +10,8 @@ tar_option_set(
     ),
     controller = crew_controller_local(workers = 20, seconds_timeout = 6000),
     format = "qs",
-    storage = "worker", retrieval = "worker"
+    storage = "worker", retrieval = "worker",
+    seed = 42
 )
 tar_config_set(
     script = "code/_targets.R",

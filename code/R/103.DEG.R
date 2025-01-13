@@ -9,18 +9,25 @@ DEG_annotation <- function(sc_annotate) {
         if (!(ident1 %in% Idents(sc_pseudo) && ident2 %in% Idents(sc_pseudo))) {
             next
         }
-        deg <- FindMarkers(
+        deg <- tryCatch({
+            FindMarkers(
             sc_pseudo,
             ident.1 = ident1,
             ident.2 = ident2,
             test.use = "DESeq2",
             min.cells.group = 2
-        ) %>%
+            ) %>%
             Add_Pct_Diff() %>%
             rownames_to_column("gene") %>%
             as_tibble() %>%
             filter(p_val_adj < 0.05) %>%
             arrange(desc(abs(avg_log2FC)))
+        }, error = function(e) {
+            message("Error in FindMarkers for ", cell_type, ": ", e$message)
+            return(NULL)
+        })
+        
+        if (is.null(deg)) next
         write_tsv(deg, paste0("results/103.DEG/DEG_", gsub("/", "_", cell_type), ".tsv"))
     }
     "results/103.DEG"

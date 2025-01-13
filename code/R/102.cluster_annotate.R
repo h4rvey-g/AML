@@ -157,9 +157,9 @@ final_annotation <- function(sc_int, sc_sub_stero) {
         left_join(sc_sub_stero, by = c("cell" = "cell")) %>%
         # change cell_type_dtl based on seurat_clusters_steroidogenic, 1 is ZR, 2 is ZG, 3 is ZF, keep the rest unchanged
         mutate(cell_type_dtl = case_when(
-            seurat_clusters_steroidogenic == 3 ~ "ZR",
-            seurat_clusters_steroidogenic %in% c(2, 4) ~ "ZG",
-            seurat_clusters_steroidogenic %in% c(1, 5) ~ "ZF",
+            seurat_clusters_steroidogenic == 4 ~ "ZR",
+            seurat_clusters_steroidogenic %in% c(3, 5) ~ "ZG",
+            seurat_clusters_steroidogenic %in% c(1, 2, 6) ~ "ZF",
             TRUE ~ cell_type_dtl
         )) %>%
         select(-seurat_clusters_steroidogenic)
@@ -173,7 +173,7 @@ final_annotation <- function(sc_int, sc_sub_stero) {
         "ZF" = c("CYP11B1", "ABCB1"),
         "ZR" = c("CYB5A", "SULT2A1"),
         # "Cap" = c("NR2F2", "RSPO3", "SPARCL1", "COL1A1", "COL1A2"),
-        "Med" = c("TH", "CHGA", "CHGB", "KIT"),
+        "Med" = c("TH", "CHGA", "CHGB", "KIT", "SYT1"),
         "Endo" = c("PECAM1", "EMCN", "PLVAP", "CDH5", "KDR"),
         "Fib" = c("LUM", "TAGLN", "MGP", "AIFM2", "S100A4", "FAP"),
         "mCAFs" = c("COL1A1", "COL1A2", "COL3A1", "POSTN", "TNC", "THY1", "ENG", "MCAM"),
@@ -186,7 +186,7 @@ final_annotation <- function(sc_int, sc_sub_stero) {
         "Bcell" = c("CD19", "MS4A1", "CD79A", "CD79B"),
         "Plasma" = c("CD38", "SDC1", "MZB1", "IGHA1", "IGHG1"),
         "Granul" = c("S100A8", "CCR3", "CD33", "IL5RA", "S100A9", "CSF3R"),
-        "LEC" = c("PDPN", "PROX1", "LYVE1", "CCL21"),
+        "LEC" = c("PDPN", "PROX1", "LYVE1", "CCL21", "NR2F2", "ID1"),
         "Eryth" = c("HBB", "GYPA", "SLC4A1", "ALAS2")
     )
     toplot <- CalcStats(sc_int,

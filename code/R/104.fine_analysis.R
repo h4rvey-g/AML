@@ -14,7 +14,7 @@ run_palantir <- function(sc_final) {
     ggsave("results/106.fine_analysis/palantir.png", p, width = 12, height = 6)
     p <- DimPlot(sc_final, reduction = "ms", group.by = c("cell_type_dtl"))
     cells <- CellSelector(p)
-    sc_final <- Palantir.Pseudotime(sc_final, start_cell = cells)
+    sc_final <- Palantir.Pseudotime(sc_final, start_cell = cells, conda_env = "base")
     ps <- sc_final@misc$Palantir$Pseudotime
     head(ps)
     colnames(ps)[3:4] <- c("fate1", "fate2")
@@ -81,7 +81,7 @@ run_palantir <- function(sc_final) {
         "SEMA3B", # Tumor suppressor
         "MEIS1"
     ) # Transcription factor
-    p <- GeneTrendHeatmap.Palantir(
+    p1 <- GeneTrendHeatmap.Palantir(
         sc_final,
         features = genes_up,
         pseudotime.data = ps,
@@ -89,8 +89,8 @@ run_palantir <- function(sc_final) {
         lineage = "fate2",
         conda_env = "base"
     )
-    ggsave("results/106.fine_analysis/gene_trend_up.png", p, width = 12, height = 6)
-    p <- GeneTrendHeatmap.Palantir(
+    ggsave("results/106.fine_analysis/gene_trend_up.png", p1, width = 12, height = 6)
+    p2 <- GeneTrendHeatmap.Palantir(
         sc_final,
         features = genes_down,
         pseudotime.data = ps,
@@ -98,8 +98,8 @@ run_palantir <- function(sc_final) {
         lineage = "fate1",
         conda_env = "base"
     )
-    ggsave("results/106.fine_analysis/gene_trend_down.png", p, width = 12, height = 6)
-    ggsave("results/106.fine_analysis/gene_trend.png", p, width = 12, height = 6)
+    ggsave("results/106.fine_analysis/gene_trend_down.png", p2, width = 12, height = 6)
+    ggsave("results/106.fine_analysis/gene_trend.png", p1/p2, width = 12, height = 12)
 
     # add col ps
     adata.AddMetadata(sc_final,
@@ -123,6 +123,7 @@ run_palantir <- function(sc_final) {
 }
 
 cell_communication <- function(sc_final, sc_filtered) {
+    library(liana)
     sc_final <- sc_final %>%
         filter(group == "tumor")
     liana_test <- liana_wrap(sc_final, idents_col = "cell_type_dtl")
@@ -134,14 +135,19 @@ cell_communication <- function(sc_final, sc_filtered) {
     unique_cell_types <- unique(sc_final$cell_type_dtl)
 
     future_map(unique_cell_types, function(cell_type) {
+        # Replace any slashes with underscores in the cell type name for the filename
         cell_type_safe <- gsub("/", "_", cell_type)
-        p <- liana_test %>%
-            liana_dotplot(
-                source_groups = c(cell_type),
-                ntop = 20
-            ) +
-            theme(axis.text.x = element_text(angle = 45, hjust = 1))
-        ggsave(paste0("results/106.fine_analysis/liana_dotplot_", cell_type_safe, ".png"), p, width = 12, height = 10)
+        tryCatch({
+            p <- liana_test %>%
+                liana_dotplot(
+                    source_groups = c(cell_type),
+                    ntop = 20
+                ) +
+                theme(axis.text.x = element_text(angle = 45, hjust = 1))
+            ggsave(paste0("results/106.fine_analysis/liana_dotplot_", cell_type_safe, ".png"), p, width = 12, height = 10)
+        }, error = function(e) {
+            message(paste("Error processing cell type", cell_type, ":", e$message))
+        })
     })
     key_types <- c("Adipo", "mCAF", "Fib", "MSC", "Endo")
     p <- liana_test %>%

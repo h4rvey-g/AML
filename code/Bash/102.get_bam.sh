@@ -10,8 +10,8 @@ dnbc4tools rna mkref --fasta data/reference_data/alias/hg38_primary/fasta/defaul
 dnbc4tools rna multi --list data/101.raw_data/samplesheet.tsv --genomeDir data/reference_data/index --threads 40 \
 --outdir data/103.self_workflow
 # run bash code/Bash/N1.sh, N2.sh, N4.sh, T1.sh, T2.sh, T4.sh sequentially
-for i in 1 2 4; do bash code/Bash/N${i}.sh; done
-for i in 1 2 4; do bash code/Bash/T${i}.sh; done
+for i in 1 2 4 7; do bash code/Bash/N${i}.sh; done
+for i in 1 2 4 7; do bash code/Bash/T${i}.sh; done
 
 process_bam() {
     bam=$1
