@@ -3,10 +3,12 @@ library(crew)
 source("code/R/101.load_data.R")
 source("code/R/102.cluster_annotate.R")
 source("code/R/103.DEG.R")
+source("code/R/104.fine_analysis.R")
 tar_option_set(
     tidy_eval = FALSE,
     packages <- c(
-        "tidyverse", "rliger", "Seurat", "SeuratExtend", "tidyseurat", "scCustomize", "patchwork", "tidyplots"
+        "tidyverse", "rliger", "Seurat", "SeuratExtend", "tidyseurat", "scCustomize", "patchwork", "tidyplots",
+        "liana"
     ),
     controller = crew_controller_local(workers = 20, seconds_timeout = 6000),
     format = "qs",
@@ -48,5 +50,6 @@ list(
     ),
     tar_target(calculate_DEG_mCAF_vs_Others_path, calculate_DEG_mCAF_vs_Others(sc_filtered),
         format = "file"
-    )
+    ),
+    tar_target(cell_communication_path, cell_communication(sc_final))
 )

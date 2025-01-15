@@ -204,6 +204,27 @@ final_annotation <- function(sc_int, sc_sub_stero) {
     p <- Heatmap(toplot, lab_fill = "zscore", facet_row = gene_groups) +
         theme(plot.background = element_rect(fill = "white"))
     ggsave("results/102.cluster_annotate/final_annotation_heatmap_zscore.png", p, width = 7, height = 14)
+    # only plot mCAFs and MSC and Med
+    markers_subset <- list(
+        "mCAFs" = c("COL1A1", "COL1A2", "COL3A1", "POSTN", "TNC", "THY1", "ENG", "MCAM", "LUM"),
+        "MSC" = c("NT5E", "CD105", "NES", "CD106", "STRIP1", "MFAP5", "KLF5", "EFNA5", "EMILIN3"),
+        "Med" = c("TH", "CHGA", "CHGB", "KIT", "SYT1")
+    )
+    toplot <- CalcStats(sc_int,
+        features = markers_subset %>% unlist(),
+        group.by = "cell_type_dtl", method = "zscore", order = "value"
+    )
+    # see which is in markers but not in rownames(toplot)
+    missing_genes <- setdiff(markers_subset %>% unlist(), rownames(toplot))
+    # remove missing genes in each element of markers
+    markers_after <- markers_subset %>% map(~ .x[.x %in% rownames(toplot)])
+    gene_groups <- rep(names(markers_after), lengths(markers_after)) %>%
+        setNames(markers_after %>% unlist())
+    # order gene_groups by rownames(toplot)
+    gene_groups <- gene_groups[rownames(toplot)]
+    p <- Heatmap(toplot, lab_fill = "zscore", facet_row = gene_groups) +
+        theme(plot.background = element_rect(fill = "white"))
+    ggsave("results/102.cluster_annotate/final_annotation_heatmap_zscore_sub.png", p, width = 7, height = 7)
     sc_int
 }
 

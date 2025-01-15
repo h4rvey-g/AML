@@ -99,7 +99,7 @@ run_palantir <- function(sc_final) {
         conda_env = "base"
     )
     ggsave("results/106.fine_analysis/gene_trend_down.png", p2, width = 12, height = 6)
-    ggsave("results/106.fine_analysis/gene_trend.png", p1/p2, width = 12, height = 12)
+    ggsave("results/106.fine_analysis/gene_trend.png", p1 / p2, width = 12, height = 12)
 
     # add col ps
     adata.AddMetadata(sc_final,
@@ -122,8 +122,7 @@ run_palantir <- function(sc_final) {
     qs::qsave(sc_final, "data/106.fine_analysis/sc_final_palantir.qs")
 }
 
-cell_communication <- function(sc_final, sc_filtered) {
-    library(liana)
+cell_communication <- function(sc_final) {
     sc_final <- sc_final %>%
         filter(group == "tumor")
     liana_test <- liana_wrap(sc_final, idents_col = "cell_type_dtl")
@@ -134,20 +133,167 @@ cell_communication <- function(sc_final, sc_filtered) {
 
     unique_cell_types <- unique(sc_final$cell_type_dtl)
 
+    liana_dotplot <- function(liana_res,
+                              source_groups = NULL,
+                              target_groups = NULL,
+                              ntop = NULL,
+                              specificity = "natmi.edge_specificity",
+                              magnitude = "sca.LRscore",
+                              y.label = "Interactions (Ligand -> Receptor)",
+                              size.label = "Interaction\nSpecificity",
+                              colour.label = "Expression\nMagnitude",
+                              show_complex = TRUE,
+                              size_range = c(2, 10),
+                              invert_specificity = FALSE,
+                              invert_magnitude = FALSE,
+                              facet_by = "source",
+                              invert_function = function(x) -log10(x + 1e-10)) {
+        if (show_complex) {
+            entities <- c("ligand.complex", "receptor.complex")
+        } else {
+            entities <- c("ligand", "receptor")
+        }
+
+        # Modify for the plot
+        liana_mod <- liana_res %>%
+            # Filter to only the cells of interest
+            `if`(
+                !is.null(source_groups),
+                filter(., source %in% source_groups),
+                .
+            ) %>%
+            `if`(
+                !is.null(target_groups),
+                filter(., target %in% target_groups),
+                .
+            )
+
+
+        if (!is.null(ntop)) {
+            # Subset to the X top interactions
+            top_int <- liana_mod %>%
+                distinct_at(entities) %>%
+                head(ntop)
+            liana_mod %<>% inner_join(top_int, by = entities)
+        }
+
+        if (invert_magnitude) {
+            liana_mod %<>% mutate(!!magnitude := invert_function(.data[[magnitude]]))
+        }
+        if (invert_specificity) {
+            liana_mod %<>% mutate(!!specificity := invert_function(.data[[specificity]]))
+        }
+
+        liana_mod %<>%
+            rename(magnitude = !!magnitude) %>%
+            rename(specificity = !!specificity) %>%
+            unite(entities, col = "interaction", sep = " -> ") %>%
+            unite(c("source", "target"), col = "source_target", remove = FALSE)
+
+
+
+        # ensure levels & order is kept the plot
+        interactions_order <- liana_mod %>%
+            pull("interaction") %>%
+            unique()
+        liana_mod %<>%
+            mutate(interaction = factor(interaction, levels = rev(interactions_order))) %>%
+            mutate(across(where(is.character), as.factor))
+
+        # colour blind palette from http://www.cookbook-r.com/Graphs/Colors_(ggplot2)/
+        cbPalette <- c(
+            "#E69F00", "#56B4E9",
+            "#009E73", "#F0E442", "#0072B2",
+            "#D55E00", "#CC79A7", "#DF69A7"
+        )
+
+        # plot
+        suppressWarnings(
+            ggplot(
+                liana_mod,
+                aes(
+                    x = if (facet_by == "source") target else source,
+                    y = interaction,
+                    colour = magnitude,
+                    size = specificity,
+                    group = if (facet_by == "source") target else source
+                )
+            ) +
+                geom_point() +
+                scale_color_gradientn(colours = viridis::viridis(20)) +
+                scale_size_continuous(range = size_range) +
+                facet_grid(. ~ get(facet_by),
+                    space = "free",
+                    scales = "free",
+                    switch = "y"
+                ) +
+                labs(
+                    y = y.label,
+                    colour = colour.label,
+                    size = size.label,
+                    x = if (facet_by == "source") "Target" else "Source",
+                    title = stringr::str_to_title(facet_by)
+                ) +
+                theme_bw(base_size = 20) +
+                theme(
+                    legend.text = element_text(size = 16),
+                    axis.text.x = element_text(
+                        colour =
+                            cbPalette[1:length(
+                                unique(if (facet_by == "source") liana_mod$source else liana_mod$target)
+                            )],
+                        face = "bold",
+                        size = 23
+                    ),
+                    axis.title.x = element_text(colour = "gray6"),
+                    axis.text.y = element_text(
+                        size = 18,
+                        vjust = 0.5
+                    ),
+                    legend.title = element_text(size = 18),
+                    panel.spacing = unit(0.1, "lines"),
+                    strip.background = element_rect(fill = NA),
+                    plot.title = element_text(vjust = 0, hjust = 0.5, colour = "gray6"),
+                    strip.text = element_text(size = 24, colour = "gray6") # ,
+                    # strip.text.y.left = element_text(angle = 0)
+                )
+        )
+    }
+
+    options(future.globals.maxSize = 2000 * 1024^2)
     future_map(unique_cell_types, function(cell_type) {
         # Replace any slashes with underscores in the cell type name for the filename
         cell_type_safe <- gsub("/", "_", cell_type)
-        tryCatch({
-            p <- liana_test %>%
-                liana_dotplot(
-                    source_groups = c(cell_type),
-                    ntop = 20
-                ) +
-                theme(axis.text.x = element_text(angle = 45, hjust = 1))
-            ggsave(paste0("results/106.fine_analysis/liana_dotplot_", cell_type_safe, ".png"), p, width = 12, height = 10)
-        }, error = function(e) {
-            message(paste("Error processing cell type", cell_type, ":", e$message))
-        })
+        tryCatch(
+            {
+                p <- liana_test %>%
+                    liana_dotplot(
+                        source_groups = c(cell_type),
+                        ntop = 20
+                    ) +
+                    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+                ggsave(paste0("results/106.fine_analysis/liana_dotplot_send_", cell_type_safe, ".png"), p, width = 12, height = 10)
+            },
+            error = function(e) {
+                message(paste("Error processing cell type", cell_type, ":", e$message))
+            }
+        )
+        # do receiver
+        tryCatch(
+            {
+                p <- liana_test %>%
+                    liana_dotplot(
+                        target_groups = c(cell_type),
+                        ntop = 20,
+                        facet_by = "target"
+                    ) +
+                    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+                ggsave(paste0("results/106.fine_analysis/liana_dotplot_receive_", cell_type_safe, ".png"), p, width = 12, height = 10)
+            },
+            error = function(e) {
+                message(paste("Error processing cell type", cell_type, ":", e$message))
+            }
+        )
     })
     key_types <- c("Adipo", "mCAF", "Fib", "MSC", "Endo")
     p <- liana_test %>%
@@ -186,6 +332,7 @@ cell_communication <- function(sc_final, sc_filtered) {
     png("results/106.fine_analysis/liana_chord_filtered.png", width = 7, height = 6, units = "in", res = 300)
     p
     dev.off()
+    "data/106.fine_analysis"
 }
 
 run_nichenet <- function(sc_final) {
