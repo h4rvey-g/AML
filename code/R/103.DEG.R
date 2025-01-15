@@ -66,7 +66,8 @@ run_GSEA <- function(sc_final) {
                 f = sc_final$cell_type_group,
                 ident.1 = ident1,
                 ident.2 = ident2,
-                top.n = 20
+                top.n = 20,
+                color = "p"
             )
             ggsave(paste0("results/104.GSEA/key/Waterfall_GO_", parent, "_", gsub("/", "_", cell_type), ".png"), p, width = 15, height = 15)
         }
@@ -89,7 +90,8 @@ run_GSEA <- function(sc_final) {
             f = sc_final$cell_type_group,
             ident.1 = ident1,
             ident.2 = ident2,
-            top.n = 20
+            top.n = 20,
+            color = "p"
         )
         ggsave(paste0("results/104.GSEA/key/Waterfall_hallmark50_", gsub("/", "_", cell_type), ".png"), p, width = 15, height = 15)
     }
@@ -137,7 +139,8 @@ run_GSEA_Fib_Cap_Adipo <- function(sc_filtered, parent) {
             f = sc_filtered_local$cell_type_group,
             ident.1 = ident1,
             ident.2 = ident2,
-            top.n = 20
+            top.n = 20,
+            color = "p"
         )
         ggsave(paste0("results/104.GSEA/key/t_vs_n/Waterfall_GO_", parent, "_", gsub("/", "_", cell_type), ".png"), p, width = 15, height = 15)
     }
@@ -151,7 +154,8 @@ run_GSEA_Fib_Cap_Adipo <- function(sc_filtered, parent) {
             f = sc_filtered_local$cell_type_dtl,
             ident.1 = ident1,
             ident.2 = ident2,
-            top.n = 20
+            top.n = 20,
+            color = "p"
         )
         ggsave(paste0(
             "results/104.GSEA/key/one_to_one/Waterfall_GO_",
@@ -191,7 +195,8 @@ compare_cell_types_hallmark50 <- function(sc_filtered) {
             f = sc_filtered$cell_type_group,
             ident.1 = ident1,
             ident.2 = ident2,
-            top.n = 20
+            top.n = 20,
+            color = "p"
         )
         ggsave(paste0("results/104.GSEA/key/t_vs_n/Waterfall_hallmark50_", gsub("/", "_", cell_type), ".png"), p, width = 15, height = 15)
     }
