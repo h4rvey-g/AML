@@ -165,12 +165,10 @@ run_GSEA_Fib_Cap_Adipo <- function(sc_filtered, parent) {
     "results/104.GSEA"
 }
 compare_cell_types_hallmark50 <- function(sc_filtered) {
-    # Run analysis using hallmark50 dataset
     options(max.print = 12, spe = "human")
     sc_filtered <- GeneSetAnalysis(sc_filtered, genesets = hall50$human, nCores = 30)
     matr <- sc_filtered@misc$AUCell$genesets
     matr <- RenameGO(matr, add_id = FALSE)
-    # rownames to lower case, but keep first letter uppercase
     rownames(matr) <- stringr::str_to_title(stringr::str_to_lower(rownames(matr)))
     toplot <- CalcStats(matr, f = sc_filtered$cell_type_dtl, method = "zscore", order = "p", n = 10)
     p <- Heatmap(toplot, lab_fill = "zscore")
@@ -184,6 +182,8 @@ compare_cell_types_hallmark50 <- function(sc_filtered) {
     sc_filtered$cell_type_group <- paste(sc_filtered$cell_type_dtl, sc_filtered$group, sep = "_")
     cell_types <- unique(sc_filtered$cell_type_dtl)
     Idents(sc_filtered) <- "cell_type_group"
+    
+    # Original tumor vs normal comparison
     for (cell_type in cell_types) {
         ident1 <- paste0(cell_type, "_tumor")
         ident2 <- paste0(cell_type, "_normal")
@@ -200,6 +200,27 @@ compare_cell_types_hallmark50 <- function(sc_filtered) {
         )
         ggsave(paste0("results/104.GSEA/key/t_vs_n/Waterfall_hallmark50_", gsub("/", "_", cell_type), ".png"), p, width = 15, height = 15)
     }
+
+    # New: Compare between each pair of cell types
+    cell_type_combinations <- combn(cell_types, 2, simplify = FALSE)
+    Idents(sc_filtered) <- "cell_type_dtl"
+    for (combo in cell_type_combinations) {
+        ident1 <- combo[1]
+        ident2 <- combo[2]
+        p <- WaterfallPlot(
+            matr,
+            f = sc_filtered$cell_type_dtl,
+            ident.1 = ident1,
+            ident.2 = ident2,
+            top.n = 20,
+            color = "p"
+        )
+        ggsave(paste0(
+            "results/104.GSEA/key/one_to_one/Waterfall_hallmark50_",
+            gsub("/", "_", combo[1]), "_vs_", gsub("/", "_", combo[2]), ".png"
+        ), p, width = 15, height = 15)
+    }
+    
     "results/104.GSEA"
 }
 
