@@ -1,14 +1,17 @@
 library(targets)
 library(crew)
-source("code/R/101.load_data.R")
-source("code/R/102.cluster_annotate.R")
-source("code/R/103.DEG.R")
-source("code/R/104.fine_analysis.R")
+tar_source(c(
+    "code/R/101.load_data.R",
+    "code/R/102.cluster_annotate.R",
+    "code/R/103.DEG.R",
+    "code/R/104.fine_analysis.R",
+    "code/R/105.myeloid.R"
+))
 tar_option_set(
     tidy_eval = FALSE,
     packages <- c(
         "tidyverse", "rliger", "Seurat", "SeuratExtend", "tidyseurat", "scCustomize", "patchwork", "tidyplots",
-        "liana"
+        "liana", "SingleCellExperiment", "scDblFinder"
     ),
     controller = crew_controller_local(workers = 20, seconds_timeout = 6000),
     format = "qs",
@@ -22,7 +25,9 @@ tar_config_set(
 options(max.print = 12, spe = "human")
 list(
     tar_target(sc_raw, load_sc()),
-    tar_target(sc_int, process_sc(sc_raw)),
+    tar_target(sc_int_preview, process_sc_preview(sc_raw)),
+    tar_target(sc_doublet, find_doublet(sc_int_preview)), # 添加新的 target
+    tar_target(sc_int, process_sc(sc_raw, sc_doublet)),
     tar_target(sc_cluster, cluster_data(sc_int)),
     tar_target(cell_type_path, "results/102.cluster_annotate/cell_type.tsv", format = "file"),
     tar_target(sc_annotate, annotate_data(sc_cluster, cell_type_path)),
@@ -51,5 +56,8 @@ list(
     tar_target(calculate_DEG_mCAF_vs_Others_path, calculate_DEG_mCAF_vs_Others(sc_filtered),
         format = "file"
     ),
-    tar_target(cell_communication_path, cell_communication(sc_final))
+    tar_target(cell_communication_path, cell_communication(sc_final)),
+    tar_target(sc_mye_clust, sub_cluster_myeloid(sc_final)),
+    tar_target(sc_mye, myeloid_annotate(sc_mye_clust)),
+    tar_target(mye_distribution_path, plot_myeloid_distribution(sc_mye), format = "file")
 )

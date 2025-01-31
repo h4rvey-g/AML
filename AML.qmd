@@ -1,0 +1,42 @@
+---
+title: "AML"
+author: "郭中昊"
+format: 
+    pptx:
+        reference-doc: template.pptx
+output-dir: report/
+---
+
+# 1 Characteristics of AML scRNA-seq data
+## 1.1 Annotation
+::: {.columns}
+::: {.column width="50%"}
+::: {style="font-size: 50%;"}
+- Adipo: Adipocyte
+- B cell: B cell
+- Endo: Endothelial cell
+- Eryth: Erythrocyte
+- Fib: Fibroblast
+- LEC: Lymphatic Endothelial Cell
+- Mac/Granul: Macrophage/Granulocyte
+- mCAF: Matrix Cancer-Associated Fibroblast
+- Med: Medullary cell of adrenal gland
+- MSC: Mesenchymal Stem Cell
+- Plasma: Plasma cell
+- T cell: T cell
+- ZF: Zona Fasciculata cell
+- ZG: Zona Glomerulosa cell
+- ZR: Zona Reticularis cell
+:::
+:::
+
+::: {.column width="50%"}
+![](results/102.cluster_annotate/final_annotation.png)
+:::
+:::
+
+## 1.2 Marker genes expression
+### 1.2.1 Top 5 marker genes of each cluster
+![](results/102.cluster_annotate/final_annotation_heatmap_zscore_classical.png)
+### 1.2.2 Full marker genes of each cluster
+![](results/102.cluster_annotate/final_annotation_heatmap_zscore.png)

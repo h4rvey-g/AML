@@ -157,9 +157,9 @@ final_annotation <- function(sc_int, sc_sub_stero) {
         left_join(sc_sub_stero, by = c("cell" = "cell")) %>%
         # change cell_type_dtl based on seurat_clusters_steroidogenic, 1 is ZR, 2 is ZG, 3 is ZF, keep the rest unchanged
         mutate(cell_type_dtl = case_when(
-            seurat_clusters_steroidogenic == 4 ~ "ZR",
-            seurat_clusters_steroidogenic %in% c(3, 5) ~ "ZG",
-            seurat_clusters_steroidogenic %in% c(1, 2, 6) ~ "ZF",
+            seurat_clusters_steroidogenic == 2 ~ "ZR",
+            seurat_clusters_steroidogenic %in% c(3, 4) ~ "ZG",
+            seurat_clusters_steroidogenic %in% c(1) ~ "ZF",
             TRUE ~ cell_type_dtl
         )) %>%
         select(-seurat_clusters_steroidogenic)
@@ -181,11 +181,12 @@ final_annotation <- function(sc_int, sc_sub_stero) {
         # "Fib_2_bd" = c("CCL19", "APOE", "CXCL2", "CXCL3", "EFEMP1"),
         # "Fib_3_gd" = c("LUM", "PDGFRA", "TAGLN", "MGP", "AIFM2", "S100A4", "FAP"),
         "Adipo" = c("ADIPOQ", "CD34", "FABP4", "ICAM1"),
-        "Mac" = c("CD68", "CSF1R", "C1QA", "C1QC"),
+        # "Mac" = c("CD68", "CSF1R", "C1QA", "C1QC"),
+        "Myeloid" = c("CD33", "CSF1R", "CD68", "S100A8", "CSF3R", "C1QA", "MPO"),
         "Tcell" = c("CD4", "TRBC1", "CD3D", "CD3E", "CD3G", "TRBC2", "CD8A"),
         "Bcell" = c("CD19", "MS4A1", "CD79A", "CD79B"),
         "Plasma" = c("CD38", "SDC1", "MZB1", "IGHA1", "IGHG1"),
-        "Granul" = c("S100A8", "CCR3", "CD33", "IL5RA", "S100A9", "CSF3R"),
+        # "Granul" = c("S100A8", "CCR3", "CD33", "IL5RA", "S100A9", "CSF3R"),
         "LEC" = c("PDPN", "PROX1", "LYVE1", "CCL21", "NR2F2", "ID1"),
         "Eryth" = c("HBB", "GYPA", "SLC4A1", "ALAS2")
     )
@@ -201,9 +202,41 @@ final_annotation <- function(sc_int, sc_sub_stero) {
         setNames(markers_after %>% unlist())
     # order gene_groups by rownames(toplot)
     gene_groups <- gene_groups[rownames(toplot)]
-    p <- Heatmap(toplot, lab_fill = "zscore", facet_row = gene_groups) +
+    p <- Heatmap(t(toplot), lab_fill = "zscore", facet_col = gene_groups) +
         theme(plot.background = element_rect(fill = "white"))
-    ggsave("results/102.cluster_annotate/final_annotation_heatmap_zscore.png", p, width = 7, height = 14)
+    ggsave("results/102.cluster_annotate/final_annotation_heatmap_zscore.png", p, width = 14, height = 7)
+    # Select top classical markers for each cell type
+    markers_specific <- list(
+        "ZG" = c("CYP11B2", "DACH1", "VSNL1", "HSD3B2", "NR5A1"),
+        "ZF" = c("CYP11B1", "CYP17A1", "ABCB1", "HSD3B2", "NR5A1"),
+        "ZR" = c("CYB5A", "SULT2A1", "CYP17A1", "HSD3B2", "NR5A1"),
+        "Med" = c("TH", "CHGA", "CHGB", "KIT", "SYT1"),
+        "Endo" = c("PECAM1", "CDH5", "EMCN", "PLVAP", "KDR"),
+        "mCAFs" = c("COL1A1", "COL3A1", "POSTN", "THY1", "MCAM"),
+        "MSC" = c("NT5E", "ENG", "NES", "STRIP1", "KLF5"),
+        "Adipo" = c("ADIPOQ", "FABP4", "CD34", "ICAM1", "PPARG"),
+        "Myeloid" = c("CD33", "CSF1R", "CD68", "MPO", "S100A8"),
+        "Tcell" = c("CD3D", "CD3E", "CD4", "CD8A", "TRBC1"),
+        "Bcell" = c("CD19", "CD79A", "CD79B", "MS4A1", "CD20"),
+        "Plasma" = c("CD38", "SDC1", "MZB1", "IGHA1", "IGHG1"),
+        "LEC" = c("PDPN", "PROX1", "LYVE1", "CCL21", "NR2F2"),
+        "Eryth" = c("HBB", "GYPA", "SLC4A1", "ALAS2", "HEMGN")
+    )
+
+    toplot <- CalcStats(sc_int,
+        features = markers_specific %>% unlist(),
+        group.by = "cell_type_dtl",
+        method = "zscore",
+        order = "value"
+    )
+
+    gene_groups <- rep(names(markers_specific), lengths(markers_specific)) %>%
+        setNames(markers_specific %>% unlist())
+    gene_groups <- gene_groups[rownames(toplot)]
+
+    p <- Heatmap(t(toplot), lab_fill = "zscore", facet_col = gene_groups) +
+        theme(plot.background = element_rect(fill = "white"))
+    ggsave("results/102.cluster_annotate/final_annotation_heatmap_zscore_classical.png", p, width = 14, height = 7)
     # only plot mCAFs and MSC and Med
     markers_subset <- list(
         "mCAFs" = c("COL1A1", "COL1A2", "COL3A1", "POSTN", "TNC", "THY1", "ENG", "MCAM", "LUM"),
