@@ -11,7 +11,7 @@ tar_option_set(
     tidy_eval = FALSE,
     packages <- c(
         "tidyverse", "rliger", "Seurat", "SeuratExtend", "tidyseurat", "scCustomize", "patchwork", "tidyplots",
-        "liana", "SingleCellExperiment", "scDblFinder"
+        "liana", "SingleCellExperiment", "scDblFinder", "foreach", "doParallel", "ComplexHeatmap"
     ),
     controller = crew_controller_local(workers = 20, seconds_timeout = 6000),
     format = "qs",
@@ -59,5 +59,8 @@ list(
     tar_target(cell_communication_path, cell_communication(sc_final)),
     tar_target(sc_mye_clust, sub_cluster_myeloid(sc_final)),
     tar_target(sc_mye, myeloid_annotate(sc_mye_clust)),
-    tar_target(mye_distribution_path, plot_myeloid_distribution(sc_mye), format = "file")
+    tar_target(mye_distribution_path, plot_myeloid_distribution(sc_mye), format = "file"),
+    tar_target(mye_GSEA_path, run_myeloid_GSEA(sc_mye), format = "file"),
+    tar_target(mye_DEG_path, myeloid_DEG_tumor_vs_normal(sc_mye), format = "file"),
+    tar_target(myeloid_plot, plot_myeloid(sc_mye)) 
 )
