@@ -5,13 +5,14 @@ tar_source(c(
     "code/R/102.cluster_annotate.R",
     "code/R/103.DEG.R",
     "code/R/104.fine_analysis.R",
-    "code/R/105.myeloid.R"
+    "code/R/105.myeloid.R",
+    "code/R/106.Tcell.R"
 ))
 tar_option_set(
     tidy_eval = FALSE,
     packages <- c(
         "tidyverse", "rliger", "Seurat", "SeuratExtend", "tidyseurat", "scCustomize", "patchwork", "tidyplots",
-        "liana", "SingleCellExperiment", "scDblFinder", "foreach", "doParallel", "ComplexHeatmap"
+        "liana", "SingleCellExperiment", "scDblFinder", "foreach", "doParallel"
     ),
     controller = crew_controller_local(workers = 20, seconds_timeout = 6000),
     format = "qs",
@@ -62,5 +63,8 @@ list(
     tar_target(mye_distribution_path, plot_myeloid_distribution(sc_mye), format = "file"),
     tar_target(mye_GSEA_path, run_myeloid_GSEA(sc_mye), format = "file"),
     tar_target(mye_DEG_path, myeloid_DEG_tumor_vs_normal(sc_mye), format = "file"),
-    tar_target(myeloid_plot, plot_myeloid(sc_mye)) 
+    tar_target(myeloid_plot, plot_myeloid(sc_mye)) ,
+    tar_target(sc_tcell_clust, sub_cluster_tcell(sc_final)),
+    tar_target(sc_tcell_clust_impro, Tcell_annotation_analysis(sc_tcell_clust)),
+    tar_target(sc_tcell, Tcell_annotate(sc_tcell_clust_impro))
 )
