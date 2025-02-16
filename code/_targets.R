@@ -66,5 +66,6 @@ list(
     tar_target(myeloid_plot, plot_myeloid(sc_mye)) ,
     tar_target(sc_tcell_clust, sub_cluster_tcell(sc_final)),
     tar_target(sc_tcell_clust_impro, Tcell_annotation_analysis(sc_tcell_clust)),
-    tar_target(sc_tcell, Tcell_annotate(sc_tcell_clust_impro))
+    tar_target(sc_tcell, Tcell_annotate(sc_tcell_clust_impro)),
+    tar_target(tcell_distribution_path, plot_tcell_distribution(sc_tcell), format = "file")
 )

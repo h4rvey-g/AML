@@ -191,13 +191,13 @@ Tcell_annotate <- function(sc_tcell_clust) {
         "2" = "CD69+ Treg", # CD69+ Tregs
         "3" = "CD4+ Naive/CM T", # Naive or Central Memory T cells
         "4" = "CD4+ Th17/Th2", # Th17 or Th2 cells
-        "5" = "CD8+ NK-like CTL", # Cytotoxic T cells
-        "6" = "CD8+ NK-like gdT", # gamma delta T cells
+        "5" = "CD8+ NKL CTL", # Cytotoxic T cells
+        "6" = "CD8+ NKL gdT", # gamma delta T cells
         "7" = "Unknown", # Unknown T cell type
         "8" = "CD8+ Mem T", # Memory T cells
         "9" = "Th17 ex", # Exhausted Th17 cells
         "10" = "CD4+ Th17/Th2", # Th17 or Th2 cells
-        "11" = "CD8+ FOXP+ gdT" # Tissue-resident CD8+ gamma delta T cells
+        "11" = "CD8+ FOXP+ gdT" # CD8+ FOXP+ gamma delta T cells
     )
 
 
@@ -225,6 +225,74 @@ Tcell_annotate <- function(sc_tcell_clust) {
         theme(plot.background = element_rect(fill = "white"))
 
     # Save the plot
-    ggsave("results/108.Tcell/tcell_annotated.png", p, width = 8, height = 7)
+    ggsave("results/108.Tcell/tcell_annotated.png", p, width = 9, height = 6)
+    markers <- list(
+        "CD4/8+" = c("CD4", "CD8A", "CD8B"),
+        "CD4+ Naive/CM T" = c("CD4", "CCR7", "TCF7", "LEF1", "SELL"),
+        "CD69+ Treg" = c("CD69", "NCAM1", "IFNG"),
+        "CD4+ Th17/Th2" = c("RORC", "GATA3", "IL17F", "TCF7", "IL7R"),
+        "CD8+ NKL CTL" = c("GZMB", "PRF1", "NKG7"),
+        "CD8+ NKL gdT" = c("TRDV1", "NCR1"),
+        "Unknown" = c(NA, NA, NA, NA, NA), # Placeholder - needs further analysis
+        "CD8+ Mem T" = c("SKAP1", "THEMIS", "CD44"),
+        "Th17 ex" = c("IL17A", "HAVCR2", "ENTPD1", "ITGAE"),
+        "CD8+ FOXP+ gdT" = c("FOXP3", "TRDC", "TRDV2", "CD8A")
+    )
+    # 计算并绘制热图
+    toplot <- CalcStats(sc_tcell_clust,
+        features = markers %>% unlist(),
+        method = "zscore", order = "value", group.by = "cell_type_dtl"
+    )
+
+    gene_groups <- rep(names(markers), lengths(markers)) %>%
+        setNames(markers %>% unlist()) %>%
+        .[rownames(toplot)]
+
+    p2 <- Heatmap(t(toplot), lab_fill = "zscore", facet_col = gene_groups) +
+        theme(plot.background = element_rect(fill = "white"))
+    ggsave("results/108.Tcell/tcell_annotated_heatmap.png", p2, width = 15, height = 8)
     sc_tcell_clust
+}
+
+plot_tcell_distribution <- function(sc_tcell) {
+    dir.create("results/108.Tcell/distribution", showWarnings = FALSE, recursive = TRUE)
+
+    df1 <- ClusterDistrBar(origin = sc_tcell$dataset, cluster = sc_tcell$cell_type_dtl, plot = FALSE) %>%
+        as.data.frame() %>%
+        rownames_to_column("cluster") %>%
+        pivot_longer(-cluster, names_to = "origin", values_to = "percentage")
+
+    # Calculate cell counts
+    cell_counts <- sc_tcell@meta.data %>%
+        group_by(cell_type_dtl, dataset) %>%
+        summarise(count = n(), .groups = "drop") %>%
+        group_by(cell_type_dtl) %>%
+        summarise(
+            N_count = sum(count[str_starts(dataset, "N")]),
+            T_count = sum(count[str_starts(dataset, "T")]),
+            .groups = "drop"
+        )
+
+    # Add cell counts to cluster labels
+    df1 <- df1 %>%
+        left_join(cell_counts, by = c("cluster" = "cell_type_dtl")) %>%
+        mutate(cluster = sprintf("%s\n(N=%d,T=%d)", cluster, N_count, T_count))
+
+    p <- tidyplot(
+        df1 %>%
+            mutate(group = ifelse(str_starts(origin, "N"), "N", "T")),
+        x = cluster, y = percentage, color = group
+    ) %>%
+        add_mean_bar() %>%
+        add_sem_errorbar() %>%
+        adjust_colors(c(colors_discrete_metro, colors_discrete_seaside)) %>%
+        adjust_size(width = 170, height = 100) %>%
+        adjust_x_axis(rotate_labels = 45)
+
+    tidyplots::save_plot(p, "results/108.Tcell/distribution/tcell_distribution.png")
+    writexl::write_xlsx(list(df1 = df1 %>% 
+        mutate(cluster = str_extract(cluster, ".*(?=\\n)"))), 
+        "results/108.Tcell/distribution/tcell_distribution.xlsx")
+
+    return("results/108.Tcell/distribution")
 }
