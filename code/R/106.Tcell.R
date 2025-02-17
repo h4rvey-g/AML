@@ -251,12 +251,139 @@ Tcell_annotate <- function(sc_tcell_clust) {
     p2 <- Heatmap(t(toplot), lab_fill = "zscore", facet_col = gene_groups) +
         theme(plot.background = element_rect(fill = "white"))
     ggsave("results/108.Tcell/tcell_annotated_heatmap.png", p2, width = 15, height = 8)
+
+    markers <- list(
+        # Core T Cell Markers
+        "T_Cells" = c("CD3D", "CD3E", "CD3G"),
+        "CD4_T_Cells" = c("CD4"),
+        "CD8_T_Cells" = c("CD8A", "CD8B"),
+
+        # Specialized T Cell Subsets
+        "Tregs" = c("FOXP3", "IL2RA", "CTLA4", "TNFRSF18"),
+        "gdT_Cells" = c("TRDC", "TRGC1", "TRGC2", "TRDV1", "TRDV2"),
+        "NK_Cells" = c("NKG7", "GNLY", "KLRD1", "NCAM1", "FCGR3A", "NCR1", "NCR3", "KIR2DL1", "KIR2DL3", "KIR3DL1"),
+
+        # Naive and Memory Markers
+        "Naive_T" = c("CCR7", "SELL", "TCF7", "LEF1", "IL7R", "SKAP1", "THEMIS", "PTPRC"),
+        "Memory_T" = c("CD44", "IL7R", "CD45RO", "PRKCQ", "STAT4"),
+
+        # Tissue-Resident Memory
+        "Trm" = c("ITGAE", "CD69", "CXCR6"),
+
+        # Effector Functions
+        "Effector" = c("GZMA", "GZMB", "GZMH", "GZMK", "PRF1", "IFNG", "TNF", "FASLG"),
+
+        # Exhaustion Markers
+        "Exhausted" = c("PDCD1", "CTLA4", "LAG3", "TIGIT", "HAVCR2", "ENTPD1"),
+
+        # T Helper Subtypes and Key Transcription Factors
+        "Th1" = c("IFNG", "CXCR3", "TBX21"), # TBX21 (T-bet)
+        "Th2" = c("IL4", "IL5", "IL13", "CCR4", "GATA3"),
+        "Th17" = c("IL17A", "IL17F", "IL22", "CCR6", "RORC")
+    )
+
+
+    # 计算并绘制热图
+    toplot <- CalcStats(sc_tcell_clust,
+        features = markers %>% unlist(),
+        method = "zscore", order = "value",
+        group.by = "cell_type_dtl"
+    )
+
+    gene_groups <- rep(names(markers), lengths(markers)) %>%
+        setNames(markers %>% unlist()) %>%
+        .[rownames(toplot)]
+    write_csv(
+        toplot %>%
+            as.data.frame() %>%
+            rownames_to_column("gene") %>%
+            mutate(across(where(is.numeric), round, 2)),
+        "results/108.Tcell/tcell_annotated_expression.csv"
+    )
     sc_tcell_clust
 }
 
-plot_tcell_distribution <- function(sc_tcell) {
+test_tcell_composition <- function(sc_tcell) {
+    # Create directory
     dir.create("results/108.Tcell/distribution", showWarnings = FALSE, recursive = TRUE)
 
+    # Create count data frame for sccomp with proper dataset column
+    # tcell_counts <- sc_tcell@meta.data %>%
+    #     select(cell_type_dtl, dataset, group) %>%
+    #     mutate(
+    #         count = 1
+    #     ) %>%
+    #     group_by(cell_type_dtl, dataset, group) %>%
+    #     summarize(count = n(), .groups = "drop")
+
+    # Run composition test with updated parameters
+    sc_tcell <- sc_tcell %>%
+        AddMetaData(
+            object = .,
+            metadata = .$dataset,
+            col.name = "sample"
+        ) %>%
+        AddMetaData(
+            object = .,
+            metadata = .$cell_type_dtl,
+            col.name = "cell_group"
+        ) 
+    composition_test <- sc_tcell %>%
+        sccomp_estimate(
+            formula_composition = ~ group,
+            # formula_variability = ~1,
+            .sample = sample,
+            .cell_group = cell_group,
+            bimodal_mean_variability_association = TRUE,
+            # .abundance = count, # Updated from .count to .abundance
+            cores = 20,
+            verbose = TRUE
+        ) %>%
+        sccomp_remove_outliers(cores = 31, verbose = FALSE) %>% 
+        sccomp_test()
+
+
+    # Generate plots
+    p1 <- composition_test %>%
+        sccomp_boxplot(factor = "group") +
+        theme(plot.background = element_rect(fill = "white"))
+    ggsave("results/108.Tcell/distribution/boxplot.png", p1, width = 10, height = 8)
+
+    p2 <- composition_test %>%
+        plot_1D_intervals() +
+        theme(plot.background = element_rect(fill = "white"))
+    ggsave("results/108.Tcell/distribution/effect_size.png", p2, width = 8, height = 6)
+
+    p3 <- composition_test %>%
+        plot_2D_intervals() +
+        theme(plot.background = element_rect(fill = "white"))
+    ggsave("results/108.Tcell/distribution/abundance_variability.png", p3, width = 8, height = 6)
+
+    # Save fold changes
+    fold_changes <- composition_test %>%
+        sccomp_proportional_fold_change(
+            formula_composition = ~ group,
+            from = "normal",
+            to = "tumor"
+        ) %>%
+        select(cell_group, statement)
+
+    write_tsv(fold_changes, "results/108.Tcell/distribution/fold_changes.tsv")
+
+    # Save test results
+    write_tsv(
+        composition_test %>%
+            select(-count_data),
+        "results/108.Tcell/distribution/test_results.tsv"
+    )
+
+    composition_test
+}
+
+plot_tcell_distribution <- function(sc_tcell, t_composition_test) {
+    dir.create("results/108.Tcell/distribution", showWarnings = FALSE, recursive = TRUE)
+
+    # Calculate distribution percentages
     df1 <- ClusterDistrBar(origin = sc_tcell$dataset, cluster = sc_tcell$cell_type_dtl, plot = FALSE) %>%
         as.data.frame() %>%
         rownames_to_column("cluster") %>%
@@ -277,6 +404,29 @@ plot_tcell_distribution <- function(sc_tcell) {
     df1 <- df1 %>%
         left_join(cell_counts, by = c("cluster" = "cell_type_dtl")) %>%
         mutate(cluster = sprintf("%s\n(N=%d,T=%d)", cluster, N_count, T_count))
+    
+    t_composition_test_res <- t_composition_test %>%
+        filter(factor == "group", c_FDR < 0.05) %>%
+        # convert c_FDR to stars
+        mutate(stars = case_when(
+            c_FDR < 0.001 ~ "***",
+            c_FDR < 0.01 ~ "**",
+            c_FDR < 0.05 ~ "*",
+            TRUE ~ ""
+        )) %>%
+        select(cell_group, stars)
+
+    # Add stars to cluster labels based on significance
+    df1 <- df1 %>%
+        mutate(cluster = map_chr(str_extract(cluster, ".*(?=\\n)"), ~{
+            stars <- t_composition_test_res$stars[t_composition_test_res$cell_group == .x]
+            count_info <- sprintf("(N=%d,T=%d)", cell_counts$N_count[cell_counts$cell_type_dtl == .x], cell_counts$T_count[cell_counts$cell_type_dtl == .x])
+            if(length(stars) > 0 && stars != "") {
+                paste0(.x, "\n", count_info, "\n", stars) 
+            } else {
+                paste0(.x, "\n", count_info, "\n") 
+            }
+        }))
 
     p <- tidyplot(
         df1 %>%
@@ -290,9 +440,9 @@ plot_tcell_distribution <- function(sc_tcell) {
         adjust_x_axis(rotate_labels = 45)
 
     tidyplots::save_plot(p, "results/108.Tcell/distribution/tcell_distribution.png")
-    writexl::write_xlsx(list(df1 = df1 %>% 
-        mutate(cluster = str_extract(cluster, ".*(?=\\n)"))), 
-        "results/108.Tcell/distribution/tcell_distribution.xlsx")
+    write_tsv(df1 %>% 
+        mutate(cluster = str_extract(cluster, ".*(?=\\n)")), 
+        "results/108.Tcell/distribution/tcell_distribution.tsv")
 
     return("results/108.Tcell/distribution")
 }

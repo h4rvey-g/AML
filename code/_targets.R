@@ -12,7 +12,7 @@ tar_option_set(
     tidy_eval = FALSE,
     packages <- c(
         "tidyverse", "rliger", "Seurat", "SeuratExtend", "tidyseurat", "scCustomize", "patchwork", "tidyplots",
-        "liana", "SingleCellExperiment", "scDblFinder", "foreach", "doParallel"
+        "liana", "SingleCellExperiment", "scDblFinder", "foreach", "doParallel", "sccomp"
     ),
     controller = crew_controller_local(workers = 20, seconds_timeout = 6000),
     format = "qs",
@@ -63,9 +63,10 @@ list(
     tar_target(mye_distribution_path, plot_myeloid_distribution(sc_mye), format = "file"),
     tar_target(mye_GSEA_path, run_myeloid_GSEA(sc_mye), format = "file"),
     tar_target(mye_DEG_path, myeloid_DEG_tumor_vs_normal(sc_mye), format = "file"),
-    tar_target(myeloid_plot, plot_myeloid(sc_mye)) ,
+    tar_target(myeloid_plot, plot_myeloid(sc_mye)),
     tar_target(sc_tcell_clust, sub_cluster_tcell(sc_final)),
     tar_target(sc_tcell_clust_impro, Tcell_annotation_analysis(sc_tcell_clust)),
     tar_target(sc_tcell, Tcell_annotate(sc_tcell_clust_impro)),
-    tar_target(tcell_distribution_path, plot_tcell_distribution(sc_tcell), format = "file")
+    tar_target(t_composition_test, test_tcell_composition(sc_tcell)),
+    tar_target(tcell_distribution_path, plot_tcell_distribution(sc_tcell, t_composition_test), format = "file")
 )

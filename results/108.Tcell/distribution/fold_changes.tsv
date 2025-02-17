@@ -1,0 +1,10 @@
+cell_group	statement
+CD4+ Naive/CM T	2.5-fold increase (from 0.1495 to 0.3806)
+CD4+ Th17/Th2	1.6-fold increase (from 0.1041 to 0.1644)
+CD69+ Treg	5.5-fold decrease (from 0.1338 to 0.0245)
+CD8+ FOXP+ gdT	1.9-fold decrease (from 0.0724 to 0.0374)
+CD8+ Mem T	1.9-fold decrease (from 0.1566 to 0.084)
+CD8+ NKL CTL	2.2-fold decrease (from 0.1294 to 0.06)
+CD8+ NKL gdT	2-fold decrease (from 0.1022 to 0.0508)
+Th17 ex	1.2-fold increase (from 0.0581 to 0.07)
+Unknown	1.4-fold increase (from 0.0939 to 0.1283)
