@@ -68,5 +68,7 @@ list(
     tar_target(sc_tcell_clust_impro, Tcell_annotation_analysis(sc_tcell_clust)),
     tar_target(sc_tcell, Tcell_annotate(sc_tcell_clust_impro)),
     tar_target(t_composition_test, test_tcell_composition(sc_tcell)),
-    tar_target(tcell_distribution_path, plot_tcell_distribution(sc_tcell, t_composition_test), format = "file")
+    tar_target(tcell_distribution_path, plot_tcell_distribution(sc_tcell, t_composition_test), format = "file"),
+    tar_target(tcell_GSEA_path, run_tcell_GSEA(sc_tcell), format = "file"),
+    tar_target(tcell_DEG_path, tcell_DEG_tumor_vs_normal(sc_tcell), format = "file")
 )

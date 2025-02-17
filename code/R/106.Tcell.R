@@ -446,3 +446,193 @@ plot_tcell_distribution <- function(sc_tcell, t_composition_test) {
 
     return("results/108.Tcell/distribution")
 }
+
+run_tcell_GSEA <- function(sc_tcell) {
+    options(max.print = 12, spe = "human")
+    dir.create("results/108.Tcell/GSEA", showWarnings = FALSE, recursive = TRUE)
+
+    # Run GO analysis
+    parents <- GeneSetAnalysisGO() %>% names()
+    for (parent in parents) {
+        dir.create(paste0("results/108.Tcell/GSEA/", parent), showWarnings = FALSE, recursive = TRUE)
+        cat("Running GSEA for", parent, "\n")
+        sc_tcell <- GeneSetAnalysisGO(sc_tcell, nCores = 50, parent = parent)
+        matr <- sc_tcell@misc$AUCell$GO[[parent]]
+        matr <- RenameGO(matr, add_id = FALSE)
+
+        # Overall heatmap for all subclusters
+        toplot <- CalcStats(matr, f = sc_tcell$cell_type_dtl, method = "zscore", order = "p", n = 10)
+        p <- Heatmap(
+            toplot,
+            lab_fill = "zscore", text.size = 5
+        )
+        ggsave(paste0("results/108.Tcell/GSEA/", parent, "/Heatmap_GO_", parent, ".png"), p, width = 14, height = nrow(toplot) * 0.4)
+        write_tsv(
+            toplot %>% as.data.frame() %>% rownames_to_column("pathway"),
+            paste0("results/108.Tcell/GSEA/", parent, "/Heatmap_GO_", parent, ".tsv")
+        )
+
+        # Compare tumor vs normal within each subcluster
+        subclusters <- unique(sc_tcell$cell_type_dtl)
+        for (subcluster in subclusters) {
+            sc_temp <- sc_tcell %>%
+                filter(cell_type_dtl == subcluster)
+            Idents(sc_temp) <- "group"
+
+            if (length(unique(sc_temp$group)) == 2) {
+                p <- WaterfallPlot(
+                    matr,
+                    f = sc_temp$group,
+                    ident.1 = "tumor",
+                    ident.2 = "normal",
+                    top.n = 20,
+                    color = "p",
+                    length = "logFC",
+                    title = paste0(parent, ": ", subcluster)
+                )
+                ggsave(paste0(
+                    "results/108.Tcell/GSEA/", parent, "/Waterfall_GO_",
+                    parent, "_", gsub("/", "_", subcluster), "_tumor_vs_normal.png"
+                ), p, width = 15, height = 15)
+            }
+        }
+    }
+
+    # Run hallmark analysis
+    sc_tcell <- GeneSetAnalysis(sc_tcell, genesets = hall50$human, nCores = 30)
+    matr <- sc_tcell@misc$AUCell$genesets
+    matr <- RenameGO(matr, add_id = FALSE)
+    rownames(matr) <- stringr::str_to_title(stringr::str_to_lower(rownames(matr)))
+
+    # Overall heatmap for hallmark pathways
+    dir.create("results/108.Tcell/GSEA/hallmark50", showWarnings = FALSE, recursive = TRUE)
+    p <- Heatmap(
+        CalcStats(matr, f = sc_tcell$cell_type_dtl, method = "zscore", order = "p", n = 10),
+        lab_fill = "zscore", text.size = 5
+    )
+    ggsave("results/108.Tcell/GSEA/hallmark50/Heatmap_hallmark50.png", p, width = 14, height = 14)
+    write_tsv(
+        CalcStats(matr, f = sc_tcell$cell_type_dtl, method = "zscore", order = "p", n = 10) %>%
+            as.data.frame() %>% rownames_to_column("pathway"),
+        "results/108.Tcell/GSEA/hallmark50/Heatmap_hallmark50.tsv"
+    )
+
+    # Run for each GO root category
+    for (root in c("BP", "MF", "CC")) {
+        cat("Processing", root, "...\n")
+        sc_tcell <- GeneSetAnalysisGO(sc_tcell, nCores = 50, root = root)
+        matr <- sc_tcell@misc$AUCell$GO[[root]]
+
+        top30_pathways <- data.frame()
+        for (cell_type in unique(sc_tcell$cell_type_dtl)) {
+            stats <- CalcStats(matr, f = sc_tcell$cell_type_dtl, method = "zscore") %>%
+                as.data.frame() %>%
+                dplyr::select(all_of(cell_type)) %>%
+                arrange(desc(.[[1]])) %>%
+                head(30) %>%
+                rownames_to_column("pathway")
+
+            top30_pathways <- bind_rows(top30_pathways, stats)
+        }
+
+        top30_pathways <- top30_pathways %>%
+            pull(pathway) %>%
+            unique()
+
+        matr_filt <- matr[top30_pathways, ]
+        matr_filt <- RenameGO(matr_filt, add_id = FALSE)
+        rownames(matr_filt) <- stringr::str_to_title(stringr::str_to_lower(rownames(matr_filt)))
+        toplot <- CalcStats(matr_filt, f = sc_tcell$cell_type_dtl, method = "zscore", order = "p", n = 30)
+
+        dir.create(file.path("results/108.Tcell/GSEA/GO", root), showWarnings = FALSE, recursive = TRUE)
+
+        p <- Heatmap(
+            CalcStats(matr_filt, f = sc_tcell$cell_type_dtl, method = "zscore", order = "p", n = 10),
+            lab_fill = "zscore", text.size = 5
+        )
+        ggsave(file.path("results/108.Tcell/GSEA/GO", root, "Heatmap_top10.png"), p, width = 14, height = 14)
+        write_tsv(
+            toplot %>%
+                as.data.frame() %>% rownames_to_column("pathway"),
+            file.path("results/108.Tcell/GSEA/GO", root, "Heatmap_top10.tsv")
+        )
+    }
+
+    return("results/108.Tcell/GSEA")
+}
+
+tcell_DEG_tumor_vs_normal <- function(sc_tcell) {
+    sc_pseudo <- AggregateExpression(sc_tcell, assays = "RNA", return.seurat = T, group.by = c("group", "dataset", "cell_type_dtl"))
+    sc_pseudo$cell_type_group <- paste(sc_pseudo$cell_type_dtl, sc_pseudo$group, sep = "_")
+    Idents(sc_pseudo) <- "cell_type_group"
+    cell_types <- unique(sc_pseudo$cell_type_dtl)
+    
+    dir.create("results/108.Tcell/DEG_tumor_vs_normal", showWarnings = FALSE, recursive = TRUE)
+    
+    # DESeq2 analysis
+    for (cell_type in cell_types) {
+        ident1 <- paste0(cell_type, "_tumor")
+        ident2 <- paste0(cell_type, "_normal")
+        if (!(ident1 %in% Idents(sc_pseudo) && ident2 %in% Idents(sc_pseudo))) {
+            next
+        }
+        deg <- tryCatch(
+            {
+                FindMarkers(
+                    sc_pseudo,
+                    ident.1 = ident1,
+                    ident.2 = ident2,
+                    test.use = "DESeq2",
+                    min.cells.group = 2
+                ) %>%
+                    Add_Pct_Diff() %>%
+                    rownames_to_column("gene") %>%
+                    as_tibble() %>%
+                    filter(p_val_adj < 0.05) %>%
+                    filter((avg_log2FC > 0 & pct.1 > 0.2) | (avg_log2FC < 0 & pct.2 > 0.2)) %>%
+                    arrange(desc(abs(avg_log2FC)))
+            },
+            error = function(e) {
+                message("Error in FindMarkers for ", cell_type, ": ", e$message)
+                return(NULL)
+            }
+        )
+
+        if (!is.null(deg)) {
+            write_tsv(deg, paste0("results/108.Tcell/DEG_tumor_vs_normal/", gsub("/", "_", cell_type), "_DEG.tsv"))
+        }
+    }
+
+    # MAST analysis with parallel processing
+    sc_tcell$cell_type_group <- paste(sc_tcell$cell_type_dtl, sc_tcell$group, sep = "_")
+    Idents(sc_tcell) <- "cell_type_group"
+    
+    cores <- min(parallel::detectCores() - 1, length(cell_types))
+    cl <- parallel::makeCluster(cores)
+    doParallel::registerDoParallel(cl)
+
+    foreach(cell_type = cell_types, .packages = c("Seurat", "tidyverse", "dplyr")) %dopar% {
+        ident1 <- paste0(cell_type, "_tumor")
+        ident2 <- paste0(cell_type, "_normal")
+        if ((ident1 %in% Idents(sc_tcell) && ident2 %in% Idents(sc_tcell))) {
+            deg <- FindMarkers(
+                sc_tcell,
+                ident.1 = ident1,
+                ident.2 = ident2,
+                test.use = "MAST",
+                min.cells.group = 2
+            ) %>%
+                scCustomize::Add_Pct_Diff() %>%
+                rownames_to_column("gene") %>%
+                as_tibble() %>%
+                filter(p_val_adj < 0.05) %>%
+                filter((avg_log2FC > 0 & pct.1 > 0.2) | (avg_log2FC < 0 & pct.2 > 0.2)) %>%
+                arrange(desc(abs(avg_log2FC)))
+            
+            write_tsv(deg, paste0("results/108.Tcell/DEG_tumor_vs_normal/", gsub("/", "_", cell_type), "_DEG_MAST.tsv"))
+        }
+    }
+
+    parallel::stopCluster(cl)
+    return("results/108.Tcell/DEG_tumor_vs_normal")
+}
