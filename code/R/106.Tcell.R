@@ -327,10 +327,10 @@ test_tcell_composition <- function(sc_tcell) {
             object = .,
             metadata = .$cell_type_dtl,
             col.name = "cell_group"
-        ) 
+        )
     composition_test <- sc_tcell %>%
         sccomp_estimate(
-            formula_composition = ~ group,
+            formula_composition = ~group,
             # formula_variability = ~1,
             .sample = sample,
             .cell_group = cell_group,
@@ -339,7 +339,7 @@ test_tcell_composition <- function(sc_tcell) {
             cores = 20,
             verbose = TRUE
         ) %>%
-        sccomp_remove_outliers(cores = 31, verbose = FALSE) %>% 
+        sccomp_remove_outliers(cores = 31, verbose = FALSE) %>%
         sccomp_test()
 
 
@@ -362,7 +362,7 @@ test_tcell_composition <- function(sc_tcell) {
     # Save fold changes
     fold_changes <- composition_test %>%
         sccomp_proportional_fold_change(
-            formula_composition = ~ group,
+            formula_composition = ~group,
             from = "normal",
             to = "tumor"
         ) %>%
@@ -404,7 +404,7 @@ plot_tcell_distribution <- function(sc_tcell, t_composition_test) {
     df1 <- df1 %>%
         left_join(cell_counts, by = c("cluster" = "cell_type_dtl")) %>%
         mutate(cluster = sprintf("%s\n(N=%d,T=%d)", cluster, N_count, T_count))
-    
+
     t_composition_test_res <- t_composition_test %>%
         filter(factor == "group", c_FDR < 0.05) %>%
         # convert c_FDR to stars
@@ -418,13 +418,13 @@ plot_tcell_distribution <- function(sc_tcell, t_composition_test) {
 
     # Add stars to cluster labels based on significance
     df1 <- df1 %>%
-        mutate(cluster = map_chr(str_extract(cluster, ".*(?=\\n)"), ~{
+        mutate(cluster = map_chr(str_extract(cluster, ".*(?=\\n)"), ~ {
             stars <- t_composition_test_res$stars[t_composition_test_res$cell_group == .x]
             count_info <- sprintf("(N=%d,T=%d)", cell_counts$N_count[cell_counts$cell_type_dtl == .x], cell_counts$T_count[cell_counts$cell_type_dtl == .x])
-            if(length(stars) > 0 && stars != "") {
-                paste0(.x, "\n", count_info, "\n", stars) 
+            if (length(stars) > 0 && stars != "") {
+                paste0(.x, "\n", count_info, "\n", stars)
             } else {
-                paste0(.x, "\n", count_info, "\n") 
+                paste0(.x, "\n", count_info, "\n")
             }
         }))
 
@@ -440,9 +440,11 @@ plot_tcell_distribution <- function(sc_tcell, t_composition_test) {
         adjust_x_axis(rotate_labels = 45)
 
     tidyplots::save_plot(p, "results/108.Tcell/distribution/tcell_distribution.png")
-    write_tsv(df1 %>% 
-        mutate(cluster = str_extract(cluster, ".*(?=\\n)")), 
-        "results/108.Tcell/distribution/tcell_distribution.tsv")
+    write_tsv(
+        df1 %>%
+            mutate(cluster = str_extract(cluster, ".*(?=\\n)")),
+        "results/108.Tcell/distribution/tcell_distribution.tsv"
+    )
 
     return("results/108.Tcell/distribution")
 }
@@ -456,7 +458,7 @@ run_tcell_GSEA <- function(sc_tcell) {
     for (parent in parents) {
         dir.create(paste0("results/108.Tcell/GSEA/", parent), showWarnings = FALSE, recursive = TRUE)
         cat("Running GSEA for", parent, "\n")
-        sc_tcell <- GeneSetAnalysisGO(sc_tcell, nCores = 50, parent = parent)
+        sc_tcell <- GeneSetAnalysisGO(sc_tcell, nCores = 50, parent = parent, n.min = 3)
         matr <- sc_tcell@misc$AUCell$GO[[parent]]
         matr <- RenameGO(matr, add_id = FALSE)
 
@@ -520,7 +522,7 @@ run_tcell_GSEA <- function(sc_tcell) {
     # Run for each GO root category
     for (root in c("BP", "MF", "CC")) {
         cat("Processing", root, "...\n")
-        sc_tcell <- GeneSetAnalysisGO(sc_tcell, nCores = 50, root = root)
+        sc_tcell <- GeneSetAnalysisGO(sc_tcell, nCores = 50, root = root, n.min = 3)
         matr <- sc_tcell@misc$AUCell$GO[[root]]
 
         top30_pathways <- data.frame()
@@ -566,9 +568,9 @@ tcell_DEG_tumor_vs_normal <- function(sc_tcell) {
     sc_pseudo$cell_type_group <- paste(sc_pseudo$cell_type_dtl, sc_pseudo$group, sep = "_")
     Idents(sc_pseudo) <- "cell_type_group"
     cell_types <- unique(sc_pseudo$cell_type_dtl)
-    
+
     dir.create("results/108.Tcell/DEG_tumor_vs_normal", showWarnings = FALSE, recursive = TRUE)
-    
+
     # DESeq2 analysis
     for (cell_type in cell_types) {
         ident1 <- paste0(cell_type, "_tumor")
@@ -599,14 +601,18 @@ tcell_DEG_tumor_vs_normal <- function(sc_tcell) {
         )
 
         if (!is.null(deg)) {
-            write_tsv(deg, paste0("results/108.Tcell/DEG_tumor_vs_normal/", gsub("/", "_", cell_type), "_DEG.tsv"))
+            write_tsv(
+                deg %>%
+                    mutate(across(where(is.numeric), ~ ifelse(abs(.) < 0.001, signif(., 3), round(., 3)))),
+                paste0("results/108.Tcell/DEG_tumor_vs_normal/", gsub("/", "_", cell_type), "_DEG.tsv")
+            )
         }
     }
 
     # MAST analysis with parallel processing
     sc_tcell$cell_type_group <- paste(sc_tcell$cell_type_dtl, sc_tcell$group, sep = "_")
     Idents(sc_tcell) <- "cell_type_group"
-    
+
     cores <- min(parallel::detectCores() - 1, length(cell_types))
     cl <- parallel::makeCluster(cores)
     doParallel::registerDoParallel(cl)
@@ -628,8 +634,12 @@ tcell_DEG_tumor_vs_normal <- function(sc_tcell) {
                 filter(p_val_adj < 0.05) %>%
                 filter((avg_log2FC > 0 & pct.1 > 0.2) | (avg_log2FC < 0 & pct.2 > 0.2)) %>%
                 arrange(desc(abs(avg_log2FC)))
-            
-            write_tsv(deg, paste0("results/108.Tcell/DEG_tumor_vs_normal/", gsub("/", "_", cell_type), "_DEG_MAST.tsv"))
+
+            write_tsv(
+                deg %>%
+                    mutate(across(where(is.numeric), ~ ifelse(abs(.) < 0.001, signif(., 3), round(., 3)))),
+                paste0("results/108.Tcell/DEG_tumor_vs_normal/", gsub("/", "_", cell_type), "_DEG_MAST.tsv")
+            )
         }
     }
 
