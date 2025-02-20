@@ -6,8 +6,53 @@ load_sc <- function() {
   sc_raw
 }
 
-process_sc_preview <- function(sc_raw) {
-  sc <- sc_raw %>% ligerToSeurat()
+filter_low_quality_cells <- function(sc) {
+  sc <- sc %>% ligerToSeurat()
+  # 计算MAD并设置阈值
+  calculate_mad_threshold <- function(x, nmads = 5) {
+    median_x <- median(x)
+    mad_x <- mad(x)
+    lower_bound <- median_x - nmads * mad_x
+    upper_bound <- median_x + nmads * mad_x
+    return(c(lower_bound, upper_bound))
+  }
+
+  # 计算各指标的MAD阈值
+  nUMI_bounds <- calculate_mad_threshold(log1p(sc$nUMI))
+  nGene_bounds <- calculate_mad_threshold(log1p(sc$nGene))
+  mito_bounds <- calculate_mad_threshold(sc$mito, nmads = 3)
+
+  # 过滤细胞
+  cells_to_keep <- sc@meta.data %>%
+    mutate(
+      pass_nUMI = log1p(nUMI) >= nUMI_bounds[1] & log1p(nUMI) <= nUMI_bounds[2],
+      pass_nGene = log1p(nGene) >= nGene_bounds[1] & log1p(nGene) <= nGene_bounds[2],
+      pass_mito = mito <= min(mito_bounds[2], 8)
+    ) %>%
+    mutate(pass_qc = pass_nUMI & pass_nGene & pass_mito)
+
+  # 输出过滤统计
+  message("原始细胞数: ", ncol(sc))
+  message("过滤后细胞数: ", sum(cells_to_keep$pass_qc))
+
+  # 绘制QC指标图
+  p1 <- FeatureScatter(sc,
+    feature1 = "nUMI",
+    feature2 = "nGene",
+    cols = ifelse(cells_to_keep$pass_qc, "gray", "red")
+  ) +
+    ggtitle(paste0("QC Metrics (", round(100*sum(cells_to_keep$pass_qc)/nrow(cells_to_keep), 1), "% cells passed)")) +
+    theme(plot.background = element_rect(fill = "white"))
+
+  ggsave("results/101.load_data/qc_metrics.png", p1, width = 10, height = 8)
+
+  # 过滤数据
+  sc <- subset(sc, cells = rownames(cells_to_keep)[cells_to_keep$pass_qc])
+
+  return(sc)
+}
+
+process_sc_preview <- function(sc) {
   sc <- sc %>%
     NormalizeData() %>%
     FindVariableFeatures() %>%
@@ -59,8 +104,7 @@ find_doublet <- function(sc_int) {
   sc_int
 }
 
-process_sc <- function(sc_raw, sc_doublet) {
-  sc <- sc_raw %>% ligerToSeurat()
+process_sc <- function(sc, sc_doublet) {
   cells_to_keep <- sc_doublet %>%
     filter(scDblFinder.class == "singlet") %>%
     pull(cell)

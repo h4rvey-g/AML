@@ -26,9 +26,10 @@ tar_config_set(
 options(max.print = 12, spe = "human")
 list(
     tar_target(sc_raw, load_sc()),
-    tar_target(sc_int_preview, process_sc_preview(sc_raw)),
+    tar_target(sc_raw_filtered, filter_low_quality_cells(sc_raw)),
+    tar_target(sc_int_preview, process_sc_preview(sc_raw_filtered)),
     tar_target(sc_doublet, find_doublet(sc_int_preview)), # 添加新的 target
-    tar_target(sc_int, process_sc(sc_raw, sc_doublet)),
+    tar_target(sc_int, process_sc(sc_raw_filtered, sc_doublet)),
     tar_target(sc_cluster, cluster_data(sc_int)),
     tar_target(cell_type_path, "results/102.cluster_annotate/cell_type.tsv", format = "file"),
     tar_target(sc_annotate, annotate_data(sc_cluster, cell_type_path)),
@@ -36,22 +37,24 @@ list(
     tar_target(sc_final, final_annotation(sc_annotate, sc_sub_stero)),
     tar_target(anno_DEG_path, find_DEGs_pseudo_bulk(sc_final), format = "file"),
     # tar_target(anndata, save_annotate(sc_final)),
-    tar_target(DEG_path, DEG_annotation(sc_final), format = "file"),
+    tar_target(cell_types, unique(sc_final$cell_type_dtl)),
+    tar_target(DEG_path, DEG_annotation(sc_final, cell_types), format = "file", pattern = map(cell_types)),
     tar_target(GSEA_path, run_GSEA(sc_final), format = "file"),
-    tar_target(distribution_path, plot_distribution(sc_final), format = "file"),
+    tar_target(composition_test, test_distribution(sc_final)),
+    tar_target(distribution_path, plot_distribution(sc_final, composition_test), format = "file"),
     tar_target(parents, {
         options(max.print = 12, spe = "human")
         GeneSetAnalysisGO() %>% names()
     }),
     tar_target(
         sc_filtered,
-        sc_final %>% filter(cell_type == "Fib-Cap-Adipo")
+        sc_final %>% filter(cell_type == "Plasticity")
     ),
-    tar_target(GSEA_Fib_Cap_Adipo_path, run_GSEA_Fib_Cap_Adipo(sc_filtered, parents),
+    tar_target(GSEA_Plasticity_path, run_GSEA_Plasticity(sc_filtered, parents),
         format = "file",
         pattern = map(parents)
     ),
-    tar_target(GSEA_Fib_Cap_Adipo_hallmark_path, compare_cell_types_hallmark50(sc_filtered),
+    tar_target(GSEA_Plasticity_hallmark_path, compare_cell_types_hallmark50(sc_filtered),
         format = "file"
     ),
     tar_target(calculate_DEG_mCAF_vs_Others_path, calculate_DEG_mCAF_vs_Others(sc_filtered),

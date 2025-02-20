@@ -23,13 +23,13 @@ annotate_data <- function(sc_int, cell_type_path) {
         "ZF" = c("CYP11B1", "ABCB1"),
         "ZR" = c("CYB5A", "SULT2A1"),
         # "Cap" = c("NR2F2", "RSPO3", "SPARCL1", "COL1A1", "COL1A2"),
-        "Med" = c("TH", "CHGA", "CHGB", "KIT"),
+        "CLC" = c("TH", "CHGA", "CHGB", "KIT"),
         "Endo" = c("PECAM1", "EMCN", "PLVAP", "CDH5", "KDR"),
-        "Fib" = c("LUM", "TAGLN", "MGP", "AIFM2", "S100A4", "FAP"),
+        "PSC" = c("LUM", "TAGLN", "MGP", "AIFM2", "S100A4", "FAP"),
         "mCAFs" = c("COL1A1", "COL1A2", "COL3A1", "POSTN", "TNC", "NT5E", "THY1", "MCAM"),
         "MSC" = c("ENG", "NES", "STRIP1", "MFAP5", "KLF5", "EFNA5", "EMILIN3"),
-        # "Fib_2_bd" = c("CCL19", "APOE", "CXCL2", "CXCL3", "EFEMP1"),
-        # "Fib_3_gd" = c("LUM", "PDGFRA", "TAGLN", "MGP", "AIFM2", "S100A4", "FAP"),
+        # "PSC_2_bd" = c("CCL19", "APOE", "CXCL2", "CXCL3", "EFEMP1"),
+        # "PSC_3_gd" = c("LUM", "PDGFRA", "TAGLN", "MGP", "AIFM2", "S100A4", "FAP"),
         "Adipo" = c("ADIPOQ", "CD34", "FABP4", "ICAM1"),
         "Mac" = c("CD68", "CSF1R", "C1QA", "C1QC"),
         "Tcell" = c("CD4", "TRBC1", "CD3D", "CD3E", "CD3G", "TRBC2", "CD8A"),
@@ -40,8 +40,8 @@ annotate_data <- function(sc_int, cell_type_path) {
         "Eryth" = c("HBB", "GYPA", "SLC4A1", "ALAS2")
     )
     # markers <- list(
-    #     "Fib_3_gd" = c("LUM", "PDGFRA", "TAGLN", "MGP", "AIFM2", "S100A4", "FAP"),
-    #     "Ret_Fib" = c("THY1", "FMO1", "MYOC", "LSP1",  "ACTA2", "PPARG", "CD36"),
+    #     "PSC_3_gd" = c("LUM", "PDGFRA", "TAGLN", "MGP", "AIFM2", "S100A4", "FAP"),
+    #     "Ret_PSC" = c("THY1", "FMO1", "MYOC", "LSP1",  "ACTA2", "PPARG", "CD36"),
     #     "mCAFs" = c("COL1A1", "COL1A2", "COL3A1", "POSTN", "TNC"),
     #     "iCAFs" = c("MMP1", "MMP3", "IL6", "CXCL8", "IDO1"),
     #     "RGS5_positive" = c("RGS5", "KCNJ8", "MCAM", "TAGLN"),
@@ -159,7 +159,7 @@ final_annotation <- function(sc_int, sc_sub_stero) {
         mutate(cell_type_dtl = case_when(
             seurat_clusters_steroidogenic == 2 ~ "ZR",
             seurat_clusters_steroidogenic %in% c(3, 4) ~ "ZG",
-            seurat_clusters_steroidogenic %in% c(1) ~ "ZF",
+            seurat_clusters_steroidogenic %in% c(1, 5) ~ "ZF",
             TRUE ~ cell_type_dtl
         )) %>%
         select(-seurat_clusters_steroidogenic)
@@ -173,13 +173,13 @@ final_annotation <- function(sc_int, sc_sub_stero) {
         "ZF" = c("CYP11B1", "ABCB1"),
         "ZR" = c("CYB5A", "SULT2A1"),
         # "Cap" = c("NR2F2", "RSPO3", "SPARCL1", "COL1A1", "COL1A2"),
-        "Med" = c("TH", "CHGA", "CHGB", "KIT", "SYT1"),
+        "CLC" = c("TH", "CHGA", "CHGB", "KIT", "SYT1"),
         "Endo" = c("PECAM1", "EMCN", "PLVAP", "CDH5", "KDR"),
-        "Fib" = c("LUM", "TAGLN", "MGP", "AIFM2", "S100A4", "FAP"),
+        "PSC" = c("LUM", "TAGLN", "MGP", "AIFM2", "S100A4", "FAP"),
         "mCAFs" = c("COL1A1", "COL1A2", "COL3A1", "POSTN", "TNC", "THY1", "ENG", "MCAM"),
         "MSC" = c("NT5E", "CD105", "NES", "CD106", "STRIP1", "MFAP5", "KLF5", "EFNA5", "EMILIN3"),
-        # "Fib_2_bd" = c("CCL19", "APOE", "CXCL2", "CXCL3", "EFEMP1"),
-        # "Fib_3_gd" = c("LUM", "PDGFRA", "TAGLN", "MGP", "AIFM2", "S100A4", "FAP"),
+        # "PSC_2_bd" = c("CCL19", "APOE", "CXCL2", "CXCL3", "EFEMP1"),
+        # "PSC_3_gd" = c("LUM", "PDGFRA", "TAGLN", "MGP", "AIFM2", "S100A4", "FAP"),
         "Adipo" = c("ADIPOQ", "CD34", "FABP4", "ICAM1"),
         # "Mac" = c("CD68", "CSF1R", "C1QA", "C1QC"),
         "Myeloid" = c("CD33", "CSF1R", "CD68", "S100A8", "CSF3R", "C1QA", "MPO"),
@@ -210,12 +210,11 @@ final_annotation <- function(sc_int, sc_sub_stero) {
         "ZG" = c("CYP11B2", "DACH1", "VSNL1", "HSD3B2", "NR5A1"),
         "ZF" = c("CYP11B1", "CYP17A1", "ABCB1", "HSD3B2", "NR5A1"),
         "ZR" = c("CYB5A", "SULT2A1", "CYP17A1", "HSD3B2", "NR5A1"),
-        "Med" = c("TH", "CHGA", "CHGB", "KIT", "SYT1"),
+        "CLC" = c("TH", "CHGA", "CHGB", "KIT", "SYT1"),
         "Endo" = c("PECAM1", "CDH5", "EMCN", "PLVAP", "KDR"),
         "mCAFs" = c("COL1A1", "COL3A1", "POSTN", "THY1", "MCAM"),
-        "MSC" = c("NT5E", "ENG", "NES", "STRIP1", "KLF5"),
+        "PSC" = c("PDGFRB", "ACTA2", "TAGLN", "CALD1", "ADAMTSL2"),
         "Adipo" = c("ADIPOQ", "FABP4", "CD34", "ICAM1", "PPARG"),
-        "Myeloid" = c("CD33", "CSF1R", "CD68", "MPO", "S100A8"),
         "Tcell" = c("CD3D", "CD3E", "CD4", "CD8A", "TRBC1"),
         "Bcell" = c("CD19", "CD79A", "CD79B", "MS4A1", "CD20"),
         "Plasma" = c("CD38", "SDC1", "MZB1", "IGHA1", "IGHG1"),
@@ -237,27 +236,31 @@ final_annotation <- function(sc_int, sc_sub_stero) {
     p <- Heatmap(t(toplot), lab_fill = "zscore", facet_col = gene_groups) +
         theme(plot.background = element_rect(fill = "white"))
     ggsave("results/102.cluster_annotate/final_annotation_heatmap_zscore_classical.png", p, width = 14, height = 7)
-    # only plot mCAFs and MSC and Med
-    markers_subset <- list(
-        "mCAFs" = c("COL1A1", "COL1A2", "COL3A1", "POSTN", "TNC", "THY1", "ENG", "MCAM", "LUM"),
-        "MSC" = c("NT5E", "CD105", "NES", "CD106", "STRIP1", "MFAP5", "KLF5", "EFNA5", "EMILIN3"),
-        "Med" = c("TH", "CHGA", "CHGB", "KIT", "SYT1")
+   # plot separately for tumor and normal
+   toplot_normal <- CalcStats(sc_int %>% filter(group == "normal"),
+       features = markers_specific %>% unlist(),
+       group.by = "cell_type_dtl",
+       method = "zscore",
+       order = "value"
+   )
+    gene_groups <- rep(names(markers_specific), lengths(markers_specific)) %>%
+        setNames(markers_specific %>% unlist())
+    gene_groups <- gene_groups[rownames(toplot_normal)]
+    toplot_tumor <- CalcStats(sc_int %>% filter(group == "tumor"),
+        features = markers_specific %>% unlist(),
+        group.by = "cell_type_dtl",
+        method = "zscore",
+        order = "value"
     )
-    toplot <- CalcStats(sc_int,
-        features = markers_subset %>% unlist(),
-        group.by = "cell_type_dtl", method = "zscore", order = "value"
-    )
-    # see which is in markers but not in rownames(toplot)
-    missing_genes <- setdiff(markers_subset %>% unlist(), rownames(toplot))
-    # remove missing genes in each element of markers
-    markers_after <- markers_subset %>% map(~ .x[.x %in% rownames(toplot)])
-    gene_groups <- rep(names(markers_after), lengths(markers_after)) %>%
-        setNames(markers_after %>% unlist())
-    # order gene_groups by rownames(toplot)
-    gene_groups <- gene_groups[rownames(toplot)]
-    p <- Heatmap(toplot, lab_fill = "zscore", facet_row = gene_groups) +
+    gene_groups <- rep(names(markers_specific), lengths(markers_specific)) %>%
+        setNames(markers_specific %>% unlist())
+    gene_groups <- gene_groups[rownames(toplot_tumor)]
+    p1 <- Heatmap(t(toplot_normal), lab_fill = "zscore", facet_col = gene_groups) +
         theme(plot.background = element_rect(fill = "white"))
-    ggsave("results/102.cluster_annotate/final_annotation_heatmap_zscore_sub.png", p, width = 7, height = 7)
+    p2 <- Heatmap(t(toplot_tumor), lab_fill = "zscore", facet_col = gene_groups) +
+        theme(plot.background = element_rect(fill = "white"))
+    p <- p1 / p2
+    ggsave("results/102.cluster_annotate/final_annotation_heatmap_zscore_classical_normal_tumor.png", p, width = 14, height = 14)
     sc_int
 }
 
@@ -314,7 +317,7 @@ find_DEGs_pseudo_bulk <- function(sc_final) {
     #     as_tibble() %>%
     #     filter(p_val_adj < 0.05) %>%
     #     arrange(desc(abs(avg_log2FC)))
-    # write_tsv(deg, paste0("results/102.cluster_annotate/cell_types_DEG/Fib_Cap_DEG.tsv"))
+    # write_tsv(deg, paste0("results/102.cluster_annotate/cell_types_DEG/PSC_Cap_DEG.tsv"))
 }
 
 # 示例调用

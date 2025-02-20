@@ -4,7 +4,7 @@ run_palantir <- function(sc_final) {
     library(tidyseurat)
     tar_load(sc_final)
     sc_final <- sc_final %>%
-        filter(cell_type %in% c("Fib-Cap-Adipo"))
+        filter(cell_type %in% c("Plasticity"))
     sc_final <- Palantir.RunDM(sc_final, conda_env = "base", reduction = "harmony")
     # create a var, combine cell_type_dtl and group
     sc_final <- sc_final %>%
@@ -295,7 +295,7 @@ cell_communication <- function(sc_final) {
             }
         )
     })
-    key_types <- c("Adipo", "mCAF", "Fib", "MSC", "Endo")
+    key_types <- c("Adipo", "mCAF", "PSC", "MSC", "Endo")
     p <- liana_test %>%
         liana_dotplot(
             source_groups = c(key_types),
