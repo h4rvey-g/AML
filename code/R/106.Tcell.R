@@ -27,50 +27,50 @@ sub_cluster_tcell <- function(sc_final) {
     sc_int
 }
 Tcell_annotation_analysis <- function(sc_tcell_clust) {
-    # Extract cluster 5 cells
-    cluster5_cells <- subset(sc_tcell_clust, immune_subcluster == "5")
+    # # Extract cluster 5 cells
+    # cluster5_cells <- subset(sc_tcell_clust, immune_subcluster == "6")
 
-    # Re-cluster cluster 5
-    cluster5_cells <- cluster5_cells %>%
-        FindNeighbors(dims = 1:30, reduction = "harmony") %>%
-        FindClusters(resolution = 0.5, algorithm = 4, method = "igraph", cluster.name = "subcluster")
+    # # Re-cluster cluster 5
+    # cluster5_cells <- cluster5_cells %>%
+    #     FindNeighbors(dims = 1:30, reduction = "harmony") %>%
+    #     FindClusters(resolution = 0.9, algorithm = 4, method = "igraph", cluster.name = "subcluster")
 
-    # Extract cluster 9 cells
-    cluster9_cells <- subset(sc_tcell_clust, immune_subcluster == "9")
+    # # Extract cluster 9 cells
+    # cluster9_cells <- subset(sc_tcell_clust, immune_subcluster == "9")
 
-    # Re-cluster cluster 9
-    cluster9_cells <- cluster9_cells %>%
-        FindNeighbors(dims = 1:30, reduction = "harmony") %>%
-        FindClusters(resolution = 0.5, algorithm = 4, method = "igraph", cluster.name = "subcluster")
+    # # Re-cluster cluster 9
+    # cluster9_cells <- cluster9_cells %>%
+    #     FindNeighbors(dims = 1:30, reduction = "harmony") %>%
+    #     FindClusters(resolution = 0.5, algorithm = 4, method = "igraph", cluster.name = "subcluster")
 
-    # Add sub-cluster labels back to main object
-    sc_tcell_clust$immune_subcluster <- as.character(sc_tcell_clust$immune_subcluster)
+    # # Add sub-cluster labels back to main object
+    # sc_tcell_clust$immune_subcluster <- as.character(sc_tcell_clust$immune_subcluster)
 
-    # Update cluster 5 labels
-    new_labels_5 <- paste0("5-", cluster5_cells$subcluster)
-    sc_tcell_clust$immune_subcluster[colnames(cluster5_cells)] <- new_labels_5
+    # # Update cluster 5 labels
+    # new_labels_5 <- paste0("6-", cluster5_cells$subcluster)
+    # sc_tcell_clust$immune_subcluster[colnames(cluster5_cells)] <- new_labels_5
 
-    # Update cluster 9 labels
-    new_labels_9 <- paste0("9-", cluster9_cells$subcluster)
-    sc_tcell_clust$immune_subcluster[colnames(cluster9_cells)] <- new_labels_9
+    # # # Update cluster 9 labels
+    # # new_labels_9 <- paste0("9-", cluster9_cells$subcluster)
+    # # sc_tcell_clust$immune_subcluster[colnames(cluster9_cells)] <- new_labels_9
 
-    sc_tcell_clust$immune_subcluster <- as.factor(sc_tcell_clust$immune_subcluster)
+    # sc_tcell_clust$immune_subcluster <- as.factor(sc_tcell_clust$immune_subcluster)
 
-    # Merge clusters 2 and 3
-    sc_tcell_clust$immune_subcluster <- as.character(sc_tcell_clust$immune_subcluster)
-    sc_tcell_clust$immune_subcluster[sc_tcell_clust$immune_subcluster == "3"] <- "2"
-    sc_tcell_clust$immune_subcluster <- as.factor(sc_tcell_clust$immune_subcluster)
-    # Create a mapping from old to new cluster numbers
-    current_levels <- sort(unique(as.character(sc_tcell_clust$immune_subcluster)))
-    new_levels <- as.character(seq_along(current_levels))
-    names(new_levels) <- current_levels
+    # # Merge clusters 2 and 3
+    # sc_tcell_clust$immune_subcluster <- as.character(sc_tcell_clust$immune_subcluster)
+    # sc_tcell_clust$immune_subcluster[sc_tcell_clust$immune_subcluster == "3"] <- "2"
+    # sc_tcell_clust$immune_subcluster <- as.factor(sc_tcell_clust$immune_subcluster)
+    # # Create a mapping from old to new cluster numbers
+    # current_levels <- sort(unique(as.character(sc_tcell_clust$immune_subcluster)))
+    # new_levels <- as.character(seq_along(current_levels))
+    # names(new_levels) <- current_levels
 
-    # Apply the mapping to reorder clusters
-    sc_tcell_clust$immune_subcluster <- plyr::mapvalues(sc_tcell_clust$immune_subcluster,
-        from = names(new_levels),
-        to = new_levels
-    )
-    sc_tcell_clust$immune_subcluster <- factor(sc_tcell_clust$immune_subcluster, levels = new_levels)
+    # # Apply the mapping to reorder clusters
+    # sc_tcell_clust$immune_subcluster <- plyr::mapvalues(sc_tcell_clust$immune_subcluster,
+    #     from = names(new_levels),
+    #     to = new_levels
+    # )
+    # sc_tcell_clust$immune_subcluster <- factor(sc_tcell_clust$immune_subcluster, levels = new_levels)
     markers <- list(
         # Core T Cell Markers
         "T_Cells" = c("CD3D", "CD3E", "CD3G"),
@@ -187,17 +187,12 @@ Tcell_annotation_analysis <- function(sc_tcell_clust) {
 
 Tcell_annotate <- function(sc_tcell_clust) {
     cluster_map <- c(
-        "1" = "CD4+ Naive/CM T", # Naive or Central Memory T cells
-        "2" = "CD69+ Treg", # CD69+ Tregs
-        "3" = "CD4+ Naive/CM T", # Naive or Central Memory T cells
-        "4" = "CD4+ Th17/Th2", # Th17 or Th2 cells
-        "5" = "CD8+ NKL CTL", # Cytotoxic T cells
-        "6" = "CD8+ NKL gdT", # gamma delta T cells
-        "7" = "Unknown", # Unknown T cell type
-        "8" = "CD8+ Mem T", # Memory T cells
-        "9" = "Th17 ex", # Exhausted Th17 cells
-        "10" = "CD4+ Th17/Th2", # Th17 or Th2 cells
-        "11" = "CD8+ FOXP+ gdT" # CD8+ FOXP+ gamma delta T cells
+        "1" = "FOXP3-_Treg", # Regulatory T cells
+        "2" = "CD8_Tex_TRM", # Exhausted Tissue-Resident CD8+ T Cells
+        "3" = "CD4_Th17/Th2", # Th17/Th2-Hybrid CD4+ T Cells
+        "4" = "CD4_TN", # Naive CD4+ T cells
+        "5" = "CD8_Act_Treg", # Activated Regulatory CD8+ T Cells
+        "6" = "Cyto_gdT/CD8_CTL" # Cytotoxic Effector γδ T Cells / CD8+ CTLs
     )
 
 
@@ -227,16 +222,23 @@ Tcell_annotate <- function(sc_tcell_clust) {
     # Save the plot
     ggsave("results/108.Tcell/tcell_annotated.png", p, width = 9, height = 6)
     markers <- list(
-        "CD4/8+" = c("CD4", "CD8A", "CD8B"),
-        "CD4+ Naive/CM T" = c("CD4", "CCR7", "TCF7", "LEF1", "SELL"),
-        "CD69+ Treg" = c("CD69", "NCAM1", "IFNG"),
-        "CD4+ Th17/Th2" = c("RORC", "GATA3", "IL17F", "TCF7", "IL7R"),
-        "CD8+ NKL CTL" = c("GZMB", "PRF1", "NKG7"),
-        "CD8+ NKL gdT" = c("TRDV1", "NCR1"),
-        "Unknown" = c(NA, NA, NA, NA, NA), # Placeholder - needs further analysis
-        "CD8+ Mem T" = c("SKAP1", "THEMIS", "CD44"),
-        "Th17 ex" = c("IL17A", "HAVCR2", "ENTPD1", "ITGAE"),
-        "CD8+ FOXP+ gdT" = c("FOXP3", "TRDC", "TRDV2", "CD8A")
+        # Cluster 1: Regulatory T cells (Tregs)
+        "Tregs" = c("CTLA4", "FOXP3", "IL2RA"),
+
+        # Cluster 2: Exhausted Tissue-Resident CD8+ T cells (Tex-TRM)
+        "CD8_Tex_TRM" = c("ENTPD1", "HAVCR2", "ITGAE", "PDCD1"),
+
+        # Cluster 3: Th17/Th2 Hybrid CD4+ T cells
+        "CD4_Th17_Th2" = c("RORC", "GATA3", "IL13", "CCR6"),
+
+        # Cluster 4: Naive CD4+ T cells
+        "CD4_Naive" = c("CCR7", "LEF1", "SELL"),
+
+        # Cluster 5: Activated CD8+ T cells with Regulatory Features
+        "CD8_Act_Reg" = c("CD8B", "CXCR3", "FOXP3", "CD69"),
+
+        # Cluster 6: Cytotoxic Effector Cells (γδ T cell-rich; CTL/γδ)
+        "Cyto_gdT_CTL" = c("IFNG", "GZMB", "TRDC", "NKG7", "NCAM1", "CD8A", "CD8B")
     )
     # 计算并绘制热图
     toplot <- CalcStats(sc_tcell_clust,
@@ -645,4 +647,337 @@ tcell_DEG_tumor_vs_normal <- function(sc_tcell) {
 
     parallel::stopCluster(cl)
     return("results/108.Tcell/DEG_tumor_vs_normal")
+}
+
+analyze_CD8_Tex_TRM_correlations <- function(sc_tcell) {
+    # 创建结果目录
+    dir.create("results/108.Tcell/correlation", showWarnings = FALSE, recursive = TRUE)
+
+    # 提取CD8_Tex_TRM细胞
+    sc_tex <- subset(sc_tcell, cell_type_dtl == "CD8_Tex_TRM")
+
+    # 定义要分析的基因列表
+    gene_sets <- list(
+        "Adenosine_Receptors" = c("ADORA1", "ADORA2A", "ADORA2B", "ADORA3"),
+        "Cytotoxicity" = c("IFNG", "GZMB", "PRF1", "TNF", "GNLY"),
+        "Treg_Markers" = c("FOXP3", "IL2RA", "CTLA4", "TIGIT", "LAG3"),
+        "Exhaustion" = c("PDCD1", "HAVCR2", "TIGIT"),
+        "Tissue_Residency" = c("ITGAE", "CD69", "CXCR6")
+    )
+
+    # 初始化结果列表
+    correlation_results <- list()
+
+    # Only analyze tumor group
+    sc_group <- sc_tex %>%
+        filter(group == "tumor")
+
+    # 提取感兴趣基因的表达矩阵
+    genes_to_analyze <- unique(c("ENTPD1", unlist(gene_sets)))
+    expr_matrix <- GetAssayData(sc_group, slot = "counts", assay = "RNA") %>%
+        as.matrix() %>%
+        t() %>%
+        sclink_norm(scale.factor = 1e6, filter.genes = FALSE, gene.names = genes_to_analyze)
+
+    # 使用scLink计算相关性
+    corr <- sclink_net(expr = expr_matrix, ncores = 30)
+    correlation_results <- corr$cor
+
+    # Process correlation matrix
+    process_correlation_matrix <- function(corr_matrix) {
+        # Only keep correlations with ENTPD1
+        entpd1_corr <- corr_matrix["ENTPD1", ]
+
+        # Convert to data frame
+        df <- data.frame(
+            Gene = names(entpd1_corr),
+            Correlation = entpd1_corr
+        ) %>%
+            # Remove self-correlation
+            filter(Gene != "ENTPD1")
+
+        # Add gene set information
+        df <- df %>%
+            mutate(Gene_Set = case_when(
+                Gene %in% gene_sets$Adenosine_Receptors ~ "Adenosine_Receptors",
+                Gene %in% gene_sets$Cytotoxicity ~ "Cytotoxicity",
+                Gene %in% gene_sets$Treg_Markers ~ "Treg_Markers",
+                Gene %in% gene_sets$Exhaustion ~ "Exhaustion",
+                Gene %in% gene_sets$Tissue_Residency ~ "Tissue_Residency"
+            ))
+
+        return(df)
+    }
+
+    all_correlations <- process_correlation_matrix(correlation_results)
+
+    # Save detailed results
+    write_csv(
+        all_correlations,
+        "results/108.Tcell/correlation/CD8_Tex_TRM_ENTPD1_correlations_tumor.csv"
+    )
+
+    # Create visualization
+    p2 <- ggplot(
+        all_correlations,
+        aes(
+            x = reorder(Gene, Correlation),
+            y = Correlation
+        )
+    ) +
+        geom_bar(stat = "identity", aes(fill = Correlation > 0)) +
+        scale_fill_manual(values = c("#4169E1", "#FF6B6B")) +
+        geom_text(aes(label = sprintf("%.2f", Correlation)),
+            vjust = ifelse(all_correlations$Correlation > 0, -0.5, 1.5)
+        ) +
+        theme_minimal() +
+        theme(
+            axis.text.x = element_text(angle = 45, hjust = 1),
+            plot.background = element_rect(fill = "white")
+        ) +
+        labs(
+            x = "Gene",
+            y = "scLink Correlation with ENTPD1",
+            title = "Correlation of ENTPD1 with Selected Genes in CD8_Tex_TRM (Tumor)"
+        ) +
+        geom_hline(yintercept = 0, linetype = "dashed") +
+        facet_grid(~Gene_Set, scales = "free_x", space = "free")
+    ggsave("results/108.Tcell/correlation/CD8_Tex_TRM_ENTPD1_correlations_tumor.png",
+        p2,
+        width = 15, height = 7
+    )
+}
+run_GSEA_Tex_TRM <- function(sc_tcell) {
+    options(max.print = 12, spe = "human")
+    dir.create("results/108.Tcell/GSEA_Tex_TRM", showWarnings = FALSE, recursive = TRUE)
+
+    # Create custom gene set of adenosine
+    adenosine_genes <- SearchDatabase(
+        item = "adenosine",
+        type = "SetName",
+        return = "genelist",
+        database = "GO",
+        n.min = 3
+    )
+
+    # Run GSEA for adenosine gene set
+    sc_tcell <- GeneSetAnalysis(sc_tcell, genesets = adenosine_genes, nCores = 30)
+    matr <- sc_tcell@misc$AUCell$genesets
+    matr <- RenameGO(matr, add_id = FALSE)
+    rownames(matr) <- stringr::str_to_title(stringr::str_to_lower(rownames(matr)))
+
+    # Overall heatmap for adenosine pathways
+    p <- Heatmap(
+        CalcStats(matr, f = sc_tcell$cell_type_dtl, method = "zscore", order = "p", n = 20),
+        lab_fill = "zscore"
+    ) +
+        theme(text = element_text(size = 14))
+    ggsave("results/108.Tcell/GSEA_Tex_TRM/Heatmap_adenosine.png", p, width = 14, height = 14)
+    write_tsv(
+        CalcStats(matr, f = sc_tcell$cell_type_dtl, method = "zscore", order = "p", n = 20) %>%
+            as.data.frame() %>% rownames_to_column("pathway"),
+        "results/108.Tcell/GSEA_Tex_TRM/Heatmap_adenosine.tsv"
+    )
+    # Create custom gene set of hypoxia
+    hypoxia_genes <- SearchDatabase(
+        item = "hypoxia",
+        type = "SetName",
+        return = "genelist",
+        database = "GO",
+        n.min = 3
+    )
+
+    # Run GSEA for hypoxia gene set
+    sc_tcell <- GeneSetAnalysis(sc_tcell, genesets = hypoxia_genes, nCores = 30)
+    matr <- sc_tcell@misc$AUCell$genesets
+    matr <- RenameGO(matr, add_id = FALSE)
+    rownames(matr) <- stringr::str_to_title(stringr::str_to_lower(rownames(matr)))
+
+    # Overall heatmap for hypoxia pathways
+    p <- Heatmap(
+        CalcStats(matr, f = sc_tcell$cell_type_dtl, method = "zscore", order = "p", n = 20),
+        lab_fill = "zscore"
+    ) +
+        theme(text = element_text(size = 14))
+    ggsave("results/108.Tcell/GSEA_Tex_TRM/Heatmap_hypoxia.png", p, width = 14, height = 14)
+    # write tsv files
+    write_tsv(
+        CalcStats(matr, f = sc_tcell$cell_type_dtl, method = "zscore", order = "p", n = 20) %>%
+            as.data.frame() %>% rownames_to_column("pathway"),
+        "results/108.Tcell/GSEA_Tex_TRM/Heatmap_hypoxia.tsv"
+    )
+    "results/108.Tcell/GSEA_Tex_TRM"
+}
+
+run_tcell_trajectory <- function(sc_tcell) {
+    dir.create("results/108.Tcell/trajectory", showWarnings = FALSE, recursive = TRUE)
+    py_run_string("")
+
+    # 1. scVelo Analysis
+    # Convert Seurat object to AnnData for scVelo
+    dir.create("data/108.Tcell/trajectory", showWarnings = FALSE, recursive = TRUE)
+    Seu2Adata(sc_tcell, filename = "results/108.Tcell/trajectory/tcell.h5ad", save.adata = "data/108.Tcell/trajectory/tcell.h5ad")
+    adata_path <- "data/108.Tcell/trajectory/tcell.h5ad"
+    seu <- scVelo.SeuratToAnndata(
+        sc_tcell,
+        filename = adata_path,
+        velocyto.loompath = "data/103.self_workflow/velocyto_combined.loom",
+        prefix = "",
+        postfix = "",
+        remove_duplicates = TRUE,
+        conda_env = "base"
+    )
+
+    # Generate velocity plots
+    scVelo.Plot(
+        color = "cell_type_dtl",
+        basis = "umap_tcell_cell_embeddings",
+        save = "results/108.Tcell/trajectory/velocity_umap.png",
+        figsize = c(7, 6),
+        conda_env = "base"
+    )
+
+    # 2. Palantir Analysis
+    # Run diffusion map
+    seu <- Palantir.RunDM(seu,
+        reduction = "harmony",
+        conda_env = "base"
+    )
+    p <- DimPlot(seu, reduction = "ms", group.by = "cell_type_dtl", label = TRUE, repel = TRUE) +
+        theme(plot.background = element_rect(fill = "white"))
+    cells_to_remove_1 <- CellSelector(p)
+    # Remove selected cells
+    seu <- subset(seu, cells = setdiff(colnames(seu), cells_to_remove_1))
+    p <- DimPlot(seu, reduction = "ms", group.by = "cell_type_dtl", label = TRUE, repel = TRUE) +
+        theme(plot.background = element_rect(fill = "white"))
+    # Create plot again after removing cells
+    cells_to_remove_2 <- CellSelector(p)
+    seu <- subset(seu, cells = setdiff(colnames(seu), cells_to_remove_2))
+    p <- DimPlot2(seu, reduction = "ms", group.by = "cell_type_dtl", label = TRUE, repel = TRUE) +
+        theme(plot.background = element_rect(fill = "white"))
+    ggsave("results/108.Tcell/trajectory/plantir_dm.png", p, width = 7, height = 6)
+    # Get cells from seu and update adata to only include those cells
+    cells <- colnames(seu)
+    py_run_string(sprintf("adata = adata[adata.obs.index.isin(%s)]", paste0("[", paste0("'", cells, "'", collapse = ","), "]")))
+    # Add ms dimension reduction to AnnData object
+    adata.AddDR(seu, dr = "ms", scv.graph = TRUE, conda_env = "base")
+
+    # Plot velocity using ms coordinates
+    scVelo.Plot(
+        color = "cell_type_dtl",
+        basis = "ms",
+        save = "results/108.Tcell/trajectory/velocity_ms.png",
+        figsize = c(7, 6),
+        conda_env = "base"
+    )
+
+    # Select start cell (CD4_TN cluster)
+    p <- DimPlot(seu, reduction = "ms", group.by = "cell_type_dtl", label = TRUE, repel = TRUE) +
+        theme(plot.background = element_rect(fill = "white"))
+    start_cell <- CellSelector(p)
+    start_cell <- colnames(seu)[which(seu$cell_type_dtl == "CD4_TN")[1]]
+
+    # Calculate pseudotime
+    seu <- Palantir.Pseudotime(seu, start_cell = start_cell, conda_env = "base")
+
+    # Get pseudotime data
+    ps <- seu@misc$Palantir$Pseudotime
+    colnames(ps)[3:4] <- c("fate1", "fate2")
+    seu@meta.data[, colnames(ps)] <- ps
+
+    # Plot pseudotime and entropy
+    p1 <- DimPlot2(seu,
+        features = colnames(ps),
+        reduction = "ms",
+        cols = list(Entropy = "D"),
+        theme = NoAxes()
+    ) + theme(plot.background = element_rect(fill = "white"))
+    ggsave("results/108.Tcell/trajectory/palantir_pseudotime.png", p1, width = 12, height = 12)
+
+    # # 3. MAGIC for gene expression smoothing
+    # sc_tcell <- Palantir.Magic(sc_tcell)
+    # sc_tcell <- NormalizeData(sc_tcell)
+
+    # # Plot gene expression before and after MAGIC
+    # key_genes <- c("CD4", "CD8A", "FOXP3", "PDCD1")
+    # p2 <- DimPlot2(sc_tcell,
+    #     features = c(key_genes, paste0("magic_", key_genes)),
+    #     cols = "A",
+    #     theme = NoAxes()
+    # )
+    # ggsave("results/108.Tcell/trajectory/magic_expression.png", p2, width = 12, height = 12)
+
+    # 4. CellRank Analysis
+    # Add pseudotime to adata
+    # Add pseudotime to adata
+    adata.AddMetadata(seu, col = colnames(ps), conda_env = "base")
+
+    # Run CellRank
+    Cellrank.Compute(time_key = "Pseudotime", conda_env = "base")
+
+    # Generate CellRank plots
+    Cellrank.Plot(
+        color = "cell_type_dtl",
+        basis = "ms",
+        save = "results/108.Tcell/trajectory/cellrank_ms.png",
+        conda_env = "base"
+    )
+
+    # 5. Gene Expression Dynamics
+    # Generate trend curves for key genes
+    key_genes <- c("CD4", "CD8A", "FOXP3", "PDCD1", "CTLA4", "LAG3")
+    p3 <- GeneTrendCurve.Palantir(
+        seu,
+        pseudotime.data = ps,
+        features = key_genes,
+        point = FALSE,
+        se = TRUE,
+        conda_env = "base"
+    )
+    ggsave("results/108.Tcell/trajectory/gene_trends.png", p3, width = 10, height = 8)
+
+    fate1_genes <- c("IFNG", "GZMB", "GZMH", "PRF1", "TBX21", "EOMES", "KLRG1", "LDHA", "TRGC1", "TRDC", "TRDV2", "TRDV1", "FCGR3A", "NKG7", "GNLY", "CCR4", "TNF", "GZMA", "TBX21", "GZMK", "PTPRC", "SKAP1") %>%
+        unique()
+    fate2_genes <- c("ENTPD1", "HAVCR2", "ITGAE", "PDCD1", "LAG3", "TIGIT", "CXCR6", "CD69", "PRDM1", "IL2RA", "FASLG", "NCR3") %>%
+        unique()
+
+    # Generate heatmap for fate1 genes
+    p4 <- GeneTrendHeatmap.Palantir(
+        seu,
+        features = fate1_genes,
+        pseudotime.data = ps,
+        lineage = "fate1",
+        conda_env = "base"
+    )
+    ggsave("results/108.Tcell/trajectory/gene_heatmap_fate1.png", p4, width = 12, height = 8)
+
+
+    p5 <- GeneTrendHeatmap.Palantir(
+        seu,
+        features = fate2_genes,
+        pseudotime.data = ps,
+        lineage = "fate2",
+        conda_env = "base"
+    )
+    ggsave("results/108.Tcell/trajectory/gene_heatmap_fate2.png", p5, width = 12, height = 8)
+
+    # 6. Slingshot Analysis
+    sc_tcell <- RunSlingshot(sc_tcell,
+        group.by = "cell_type_dtl",
+        start.clus = "CD4_TN"
+    )
+
+    # Add Slingshot pseudotime to metadata
+    sling <- sc_tcell@misc$slingshot$PCA$SlingPseudotime
+    sc_tcell@meta.data[, colnames(sling)] <- as.data.frame(sling)
+
+    # Plot Slingshot results
+    p5 <- DimPlot2(sc_tcell,
+        features = colnames(sling),
+        cols = "C",
+        theme = NoAxes()
+    )
+    ggsave("results/108.Tcell/trajectory/slingshot_pseudotime.png", p5, width = 12, height = 5)
+
+    return(sc_tcell)
 }

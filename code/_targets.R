@@ -12,7 +12,7 @@ tar_option_set(
     tidy_eval = FALSE,
     packages <- c(
         "tidyverse", "rliger", "Seurat", "SeuratExtend", "tidyseurat", "scCustomize", "patchwork", "tidyplots",
-        "liana", "SingleCellExperiment", "scDblFinder", "foreach", "doParallel", "sccomp"
+        "liana", "SingleCellExperiment", "scDblFinder", "foreach", "doParallel", "sccomp", "scLink"
     ),
     controller = crew_controller_local(workers = 20, seconds_timeout = 6000),
     format = "qs",
@@ -75,5 +75,7 @@ list(
     tar_target(t_composition_test, test_tcell_composition(sc_tcell)),
     tar_target(tcell_distribution_path, plot_tcell_distribution(sc_tcell, t_composition_test), format = "file"),
     tar_target(tcell_GSEA_path, run_tcell_GSEA(sc_tcell), format = "file"),
-    tar_target(tcell_DEG_path, tcell_DEG_tumor_vs_normal(sc_tcell), format = "file")
+    tar_target(tcell_DEG_path, tcell_DEG_tumor_vs_normal(sc_tcell), format = "file"),
+    tar_target(Tex_TRM_correlations, analyze_CD8_Tex_TRM_correlations(sc_tcell)),
+    tar_target(GSEA_Tex_TRM_path, run_GSEA_Tex_TRM(sc_tcell), format = "file")
 )
