@@ -825,3 +825,175 @@ plot_myeloid <- function(sc_mye) {
     ComplexHeatmap::draw(p1)
     dev.off()
 }
+
+run_myeloid_trajectory <- function(sc_mye) {
+    dir.create("results/107.myeloid/trajectory", showWarnings = FALSE, recursive = TRUE)
+    py_run_string("")
+
+    # 1. scVelo Analysis
+    # Convert Seurat object to AnnData for scVelo
+    dir.create("data/107.myeloid/trajectory", showWarnings = FALSE, recursive = TRUE)
+    Seu2Adata(sc_mye, save.adata = "data/107.myeloid/trajectory/myeloid.h5ad", conda_env = "base")
+    adata_path <- "data/107.myeloid/trajectory/myeloid.h5ad"
+    seu <- scVelo.SeuratToAnndata(
+        sc_mye,
+        filename = adata_path,
+        velocyto.loompath = "data/103.self_workflow/velocyto_combined.loom",
+        prefix = "",
+        postfix = "",
+        remove_duplicates = TRUE,
+        conda_env = "base"
+    )
+
+    # Generate velocity plots
+    scVelo.Plot(
+        color = "cell_type_dtl",
+        basis = "umap_mye_cell_embeddings",
+        save = "results/107.myeloid/trajectory/velocity_umap.png",
+        figsize = c(7, 6),
+        conda_env = "base"
+    )
+
+    # 2. Palantir Analysis
+    # Run diffusion map
+    seu <- Palantir.RunDM(seu,
+        reduction = "harmony",
+        conda_env = "base"
+    )
+    p <- DimPlot(seu, reduction = "ms", group.by = "cell_type_dtl", label = TRUE, repel = TRUE) +
+        theme(plot.background = element_rect(fill = "white"))
+    cells_to_remove_1 <- CellSelector(p)
+    # Remove selected cells
+    seu <- subset(seu, cells = setdiff(colnames(seu), cells_to_remove_1))
+
+    p <- DimPlot2(seu, reduction = "ms", group.by = "cell_type_dtl", label = TRUE, repel = TRUE) +
+        theme(plot.background = element_rect(fill = "white"))
+    ggsave("results/107.myeloid/trajectory/plantir_dm.png", p, width = 7, height = 6)
+
+    # Get cells from seu and update adata
+    cells <- colnames(seu)
+    py_run_string(sprintf("adata = adata[adata.obs.index.isin(%s)]", paste0("[", paste0("'", cells, "'", collapse = ","), "]")))
+    
+    # Add ms dimension reduction to AnnData object
+    adata.AddDR(seu, dr = "ms", scv.graph = TRUE, conda_env = "base")
+
+    # Plot velocity using ms coordinates
+    scVelo.Plot(
+        color = "cell_type_dtl",
+        basis = "ms",
+        save = "results/107.myeloid/trajectory/velocity_ms.png",
+        figsize = c(7, 6),
+        conda_env = "base"
+    )
+
+    # Select start cell (Eosinophil cluster as starting point)
+    start_cell <- colnames(seu)[which(seu$cell_type_dtl == "Eosinophil")[1]]
+
+    # Calculate pseudotime
+    seu <- Palantir.Pseudotime(seu, start_cell = start_cell, conda_env = "base")
+
+    # Get pseudotime data
+    ps <- seu@misc$Palantir$Pseudotime
+    colnames(ps)[3:4] <- c("fate1", "fate2")
+    seu@meta.data[, colnames(ps)] <- ps
+
+    # Plot pseudotime and entropy
+    p1 <- DimPlot2(seu,
+        features = colnames(ps),
+        reduction = "ms",
+        cols = list(Entropy = "D"),
+        theme = NoAxes()
+    ) + theme(plot.background = element_rect(fill = "white"))
+    ggsave("results/107.myeloid/trajectory/palantir_pseudotime.png", p1, width = 12, height = 12)
+
+    # 4. CellRank Analysis
+    # Add pseudotime to adata
+    adata.AddMetadata(seu, col = colnames(ps), conda_env = "base")
+
+    # Run CellRank
+    Cellrank.Compute(time_key = "Pseudotime", conda_env = "base")
+
+    # Generate CellRank plots
+    Cellrank.Plot(
+        color = "cell_type_dtl",
+        basis = "ms",
+        save = "results/107.myeloid/trajectory/cellrank_ms.png",
+        conda_env = "base"
+    )
+
+    # 5. Gene Expression Dynamics
+    # Define key genes for myeloid cells
+    key_genes <- c(
+        "CD14", "FCGR3A", # Monocyte markers
+        "CD163", "MRC1", # M2 macrophage markers
+        "TREM2", "APOE", # TREM2+ macrophage markers
+        "FOLR2", "CCL18", # FOLR2+ macrophage markers
+        "IL1B", "TNF" # Inflammatory markers
+    )
+
+    # Generate trend curves
+    p3 <- GeneTrendCurve.Palantir(
+        seu,
+        pseudotime.data = ps,
+        features = key_genes,
+        point = FALSE,
+        se = TRUE,
+        conda_env = "base"
+    )
+    ggsave("results/107.myeloid/trajectory/gene_trends.png", p3, width = 10, height = 8)
+
+    # Define genes for different fates
+    fate1_genes <- c(
+        "CD163", "MRC1", "FOLR2", "CCL18", # M2/FOLR2 markers
+        "TREM2", "APOE", "LPL", "FABP4", # TREM2+ markers
+        "IL10", "TGFB1", "IGF1", # Anti-inflammatory
+        "PPARG", "ABCA1", "NR1H3" # Lipid metabolism
+    )
+
+    fate2_genes <- c(
+        "IL1B", "TNF", "CXCL10", "IL6", # Pro-inflammatory
+        "CD80", "CD86", "STAT1", # M1 activation
+        "TLR4", "TLR2", "NOD2", # Pattern recognition
+        "CCR2", "CCL2", "ICAM1", # Recruitment/adhesion
+        "HIF1A", "VEGFA", "MMP9" # Tissue remodeling
+    )
+
+    # Generate heatmaps for each fate
+    p4 <- GeneTrendHeatmap.Palantir(
+        seu,
+        features = fate1_genes,
+        pseudotime.data = ps,
+        lineage = "fate1",
+        conda_env = "base"
+    )
+    ggsave("results/107.myeloid/trajectory/gene_heatmap_fate1.png", p4, width = 12, height = 8)
+
+    p5 <- GeneTrendHeatmap.Palantir(
+        seu,
+        features = fate2_genes,
+        pseudotime.data = ps,
+        lineage = "fate2",
+        conda_env = "base"
+    )
+    ggsave("results/107.myeloid/trajectory/gene_heatmap_fate2.png", p5, width = 12, height = 8)
+
+    # 6. Slingshot Analysis
+    sc_mye <- RunSlingshot(sc_mye,
+        group.by = "cell_type_dtl",
+        start.clus = "Eosinophil"
+    )
+
+    # Add Slingshot pseudotime to metadata
+    sling <- sc_mye@misc$slingshot$PCA$SlingPseudotime
+    sc_mye@meta.data[, colnames(sling)] <- as.data.frame(sling)
+
+    # Plot Slingshot results
+    p6 <- DimPlot2(sc_mye,
+        features = colnames(sling),
+        cols = "C",
+        theme = NoAxes()
+    )
+    ggsave("results/107.myeloid/trajectory/slingshot_pseudotime.png", p6, width = 12, height = 5)
+
+    return(sc_mye)
+}

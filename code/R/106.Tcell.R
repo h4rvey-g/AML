@@ -936,11 +936,28 @@ run_tcell_trajectory <- function(sc_tcell) {
     )
     ggsave("results/108.Tcell/trajectory/gene_trends.png", p3, width = 10, height = 8)
 
-    fate1_genes <- c("IFNG", "GZMB", "GZMH", "PRF1", "TBX21", "EOMES", "KLRG1", "LDHA", "TRGC1", "TRDC", "TRDV2", "TRDV1", "FCGR3A", "NKG7", "GNLY", "CCR4", "TNF", "GZMA", "TBX21", "GZMK", "PTPRC", "SKAP1") %>%
+    fate1_genes <- c("ENTPD1", "HAVCR2", "ITGAE", "PDCD1", "LAG3", "TIGIT", "CXCR6", "CD69", "PRDM1", "IL2RA", "FASLG", "NCR3") %>%
         unique()
-    fate2_genes <- c("ENTPD1", "HAVCR2", "ITGAE", "PDCD1", "LAG3", "TIGIT", "CXCR6", "CD69", "PRDM1", "IL2RA", "FASLG", "NCR3") %>%
-        unique()
-
+    fate2_genes <- c(
+        "IFNG", # Key cytotoxic cytokine
+        "GZMB", # Granzyme B effector molecule
+        "PRF1", # Perforin
+        "GNLY", # Granulysin
+        "NKG7", # Cytolytic granule component
+        "TRDC", # γδ-TCR chain
+        "TRGC1", # γδ-TCR constant region
+        "TRAC", # αβ-TCR chain
+        "TRBC1", # αβ-TCR constant region
+        "KLRD1", # CD94 (NK cell activation)
+        "FCGR3A", # CD16 (ADCC potential)
+        "TNF", # Pro-inflammatory cytokine
+        "TBX21", # T-bet (CTL master regulator)
+        "CX3CR1", # Tissue surveillance receptor
+        "GZMH", # Early activation granzyme
+        "CCL5", # Chemokine for immune recruitment
+        "STAT4", # IL-12 signaling
+        "CD8A" # Core CTL marker
+    )
     # Generate heatmap for fate1 genes
     p4 <- GeneTrendHeatmap.Palantir(
         seu,
