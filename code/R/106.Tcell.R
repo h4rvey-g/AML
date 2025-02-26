@@ -816,7 +816,7 @@ run_tcell_trajectory <- function(sc_tcell) {
     # 1. scVelo Analysis
     # Convert Seurat object to AnnData for scVelo
     dir.create("data/108.Tcell/trajectory", showWarnings = FALSE, recursive = TRUE)
-    Seu2Adata(sc_tcell, filename = "results/108.Tcell/trajectory/tcell.h5ad", save.adata = "data/108.Tcell/trajectory/tcell.h5ad")
+    Seu2Adata(sc_tcell,  save.adata = "data/108.Tcell/trajectory/tcell.h5ad", conda_env = "base")
     adata_path <- "data/108.Tcell/trajectory/tcell.h5ad"
     seu <- scVelo.SeuratToAnndata(
         sc_tcell,
