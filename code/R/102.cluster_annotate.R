@@ -104,11 +104,9 @@ sub_cluster_steroidogenic <- function(sc_int) {
 
     sc_int
     markers <- list(
-        "Steroidogenic" = c("NR5A1", "CYP11A1", "CYP11B2", "HSD3B2", "CYP17A1", "CYP21A2"),
-        "ZG" = c("DACH1", "VSNL1"),
-        "ZG/ZF" = c("CCN3", "NCAM1"),
-        "ZF" = c("CYP11B1", "ABCB1"),
-        "ZR" = c("CYB5A", "SULT2A1")
+        "ZG" = c("NR5A1", "DACH1", "CYP11B2", "VSNL1"),
+        "ZG/ZF" = c("NR5A1", "NOV", "NCAM1"),
+        "ZR" = c("NR5A1", "CYB5A", "SULT2A1")
     )
     toplot <- CalcStats(sc_int,
         features = markers %>% unlist(),
@@ -207,19 +205,20 @@ final_annotation <- function(sc_int, sc_sub_stero) {
     ggsave("results/102.cluster_annotate/final_annotation_heatmap_zscore.png", p, width = 14, height = 7)
     # Select top classical markers for each cell type
     markers_specific <- list(
-        "ZG" = c("CYP11B2", "DACH1", "VSNL1", "HSD3B2", "NR5A1"),
-        "ZF" = c("CYP11B1", "CYP17A1", "ABCB1", "HSD3B2", "NR5A1"),
-        "ZR" = c("CYB5A", "SULT2A1", "CYP17A1", "HSD3B2", "NR5A1"),
-        "CLC" = c("TH", "CHGA", "CHGB", "KIT", "SYT1"),
-        "Endo" = c("PECAM1", "CDH5", "EMCN", "PLVAP", "KDR"),
-        "mCAFs" = c("COL1A1", "COL3A1", "POSTN", "THY1", "MCAM"),
-        "PSC" = c("PDGFRB", "ACTA2", "TAGLN", "CALD1", "ADAMTSL2"),
-        "Adipo" = c("ADIPOQ", "FABP4", "CD34", "ICAM1", "PPARG"),
-        "Tcell" = c("CD3D", "CD3E", "CD4", "CD8A", "TRBC1"),
-        "Bcell" = c("CD19", "CD79A", "CD79B", "MS4A1", "CD20"),
-        "Plasma" = c("CD38", "SDC1", "MZB1", "IGHA1", "IGHG1"),
-        "LEC" = c("PDPN", "PROX1", "LYVE1", "CCL21", "NR2F2"),
-        "Eryth" = c("HBB", "GYPA", "SLC4A1", "ALAS2", "HEMGN")
+        "ZG" = c("NR5A1", "DACH1", "CYP11B2"),
+        "ZG/ZF" = c("NR5A1", "NOV", "NCAM1"),
+        "ZR" = c("NR5A1", "CYB5A", "SULT2A1"),
+        "CLC" = c("TH", "CHGA", "CHGB"),
+        "Endo" = c("PECAM1", "EMCN"),
+        "Fib" = c("COL1A1", "COL3A1", "THY1"),
+        "PSC" = c("RGS5", "PDGFRB"),
+        "Adipo" = c("ADIPOQ", "FABP4", "PPARG"),
+        "Tcell" = c("CD3D", "CD3E", "TRBC1"),
+        "Bcell" = c("CD19", "CD79A", "MS4A1"),
+        "Myeloid" = c("ITGAM", "CD33", "ANPEP"),
+        "Plasma" = c("CD38", "SDC1", "IGHG1"),
+        "LEC" = c("PDPN", "PROX1", "NR2F2"),
+        "Eryth" = c("HBB", "GYPA", "SLC4A1")
     )
 
     toplot <- CalcStats(sc_int,

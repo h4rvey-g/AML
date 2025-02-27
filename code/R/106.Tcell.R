@@ -816,29 +816,31 @@ run_tcell_trajectory <- function(sc_tcell) {
     # 1. scVelo Analysis
     # Convert Seurat object to AnnData for scVelo
     dir.create("data/108.Tcell/trajectory", showWarnings = FALSE, recursive = TRUE)
-    Seu2Adata(sc_tcell,  save.adata = "data/108.Tcell/trajectory/tcell.h5ad", conda_env = "base")
+    Seu2Adata(sc_tcell, save.adata = "data/108.Tcell/trajectory/tcell.h5ad", conda_env = "base")
     adata_path <- "data/108.Tcell/trajectory/tcell.h5ad"
-    seu <- scVelo.SeuratToAnndata(
-        sc_tcell,
-        filename = adata_path,
-        velocyto.loompath = "data/103.self_workflow/velocyto_combined.loom",
-        prefix = "",
-        postfix = "",
-        remove_duplicates = TRUE,
-        conda_env = "base"
-    )
+    seu <- sc_tcell
+    # seu <- scVelo.SeuratToAnndata(
+    #     sc_tcell,
+    #     filename = adata_path,
+    #     velocyto.loompath = "data/103.self_workflow/velocyto_combined.loom",
+    #     prefix = "",
+    #     postfix = "",
+    #     remove_duplicates = TRUE,
+    #     conda_env = "base"
+    # )
 
-    # Generate velocity plots
-    scVelo.Plot(
-        color = "cell_type_dtl",
-        basis = "umap_tcell_cell_embeddings",
-        save = "results/108.Tcell/trajectory/velocity_umap.png",
-        figsize = c(7, 6),
-        conda_env = "base"
-    )
+    # # Generate velocity plots
+    # scVelo.Plot(
+    #     color = "cell_type_dtl",
+    #     basis = "umap_tcell_cell_embeddings",
+    #     save = "results/108.Tcell/trajectory/velocity_umap.png",
+    #     figsize = c(7, 6),
+    #     conda_env = "base"
+    # )
 
     # 2. Palantir Analysis
     # Run diffusion map
+    set.seed(42)
     seu <- Palantir.RunDM(seu,
         reduction = "harmony",
         conda_env = "base"
@@ -860,25 +862,25 @@ run_tcell_trajectory <- function(sc_tcell) {
     cells <- colnames(seu)
     py_run_string(sprintf("adata = adata[adata.obs.index.isin(%s)]", paste0("[", paste0("'", cells, "'", collapse = ","), "]")))
     # Add ms dimension reduction to AnnData object
-    adata.AddDR(seu, dr = "ms", scv.graph = TRUE, conda_env = "base")
+    adata.AddDR(seu, dr = "ms", scv.graph = FALSE, conda_env = "base")
 
     # Plot velocity using ms coordinates
-    scVelo.Plot(
-        color = "cell_type_dtl",
-        basis = "ms",
-        save = "results/108.Tcell/trajectory/velocity_ms.png",
-        figsize = c(7, 6),
-        conda_env = "base"
-    )
+    # scVelo.Plot(
+    #     color = "cell_type_dtl",
+    #     basis = "ms",
+    #     save = "results/108.Tcell/trajectory/velocity_ms.png",
+    #     figsize = c(7, 6),
+    #     conda_env = "base"
+    # )
 
     # Select start cell (CD4_TN cluster)
-    p <- DimPlot(seu, reduction = "ms", group.by = "cell_type_dtl", label = TRUE, repel = TRUE) +
+    p <- DimPlot(seu %>% subset(cell_type_dtl == "CD4_TN"), reduction = "ms", group.by = "cell_type_dtl", label = TRUE, repel = TRUE) +
         theme(plot.background = element_rect(fill = "white"))
     start_cell <- CellSelector(p)
     start_cell <- colnames(seu)[which(seu$cell_type_dtl == "CD4_TN")[1]]
 
     # Calculate pseudotime
-    seu <- Palantir.Pseudotime(seu, start_cell = start_cell, conda_env = "base")
+    seu <- Palantir.Pseudotime(seu, start_cell = start_cell, conda_env = "base", n_jobs = 10)
 
     # Get pseudotime data
     ps <- seu@misc$Palantir$Pseudotime
@@ -939,6 +941,7 @@ run_tcell_trajectory <- function(sc_tcell) {
     fate1_genes <- c("ENTPD1", "HAVCR2", "ITGAE", "PDCD1", "LAG3", "TIGIT", "CXCR6", "CD69", "PRDM1", "IL2RA", "FASLG", "NCR3") %>%
         unique()
     fate2_genes <- c(
+        "FOXP3",
         "IFNG", # Key cytotoxic cytokine
         "GZMB", # Granzyme B effector molecule
         "PRF1", # Perforin
@@ -946,7 +949,7 @@ run_tcell_trajectory <- function(sc_tcell) {
         "NKG7", # Cytolytic granule component
         "TRDC", # γδ-TCR chain
         "TRGC1", # γδ-TCR constant region
-        "TRAC", # αβ-TCR chain
+        "TRDV1", # αβ-TCR chain
         "TRBC1", # αβ-TCR constant region
         "KLRD1", # CD94 (NK cell activation)
         "FCGR3A", # CD16 (ADCC potential)
