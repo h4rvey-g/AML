@@ -1,7 +1,7 @@
 cell_group	statement
-Eosinophil	3-fold increase (from 0.0438 to 0.1318)
-Foam_Cell	3.5-fold decrease (from 0.0958 to 0.0275)
-FOLR2_Mac	1.1-fold decrease (from 0.2233 to 0.2086)
-M2_Mac	1.2-fold increase (from 0.3652 to 0.421)
-Mast	2.4-fold increase (from 0.0774 to 0.1878)
-TREM2_Mac	8.4-fold decrease (from 0.1945 to 0.0233)
+DC	1.2-fold increase (from 0.036 to 0.0433)
+Eosinophil	2.4-fold increase (from 0.0516 to 0.1218)
+Foam	1.9-fold increase (from 0.094 to 0.183)
+Mast	1.9-fold increase (from 0.0953 to 0.1818)
+PMP	1.1-fold increase (from 0.3428 to 0.3775)
+TREM2_LAM	4.1-fold decrease (from 0.3803 to 0.0927)

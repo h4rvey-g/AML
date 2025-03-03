@@ -6,7 +6,7 @@ sub_cluster_tcell <- function(sc_final) {
     # 重新聚类
     sc_int <- sc_int %>%
         FindNeighbors(dims = 1:30, reduction = "harmony") %>%
-        FindClusters(resolution = 0.8, algorithm = 4, method = "igraph", cluster.name = "immune_subcluster")
+        FindClusters(resolution = 0.9, algorithm = 4, method = "igraph", cluster.name = "immune_subcluster")
     sc_int <- RunUMAP(sc_int,
         dims = 1:30,
         reduction = "harmony",
@@ -26,7 +26,7 @@ sub_cluster_tcell <- function(sc_final) {
     ggsave("results/108.Tcell/sub_cluster_immune.png", p1, width = 7, height = 7)
     sc_int
 }
-Tcell_annotation_analysis <- function(sc_tcell_clust) {
+Tcell_annotation_analysis <- function(sc_tcell_clust, sc_final) {
     # # Extract cluster 5 cells
     # cluster5_cells <- subset(sc_tcell_clust, immune_subcluster == "6")
 
@@ -56,10 +56,10 @@ Tcell_annotation_analysis <- function(sc_tcell_clust) {
 
     # sc_tcell_clust$immune_subcluster <- as.factor(sc_tcell_clust$immune_subcluster)
 
-    # # Merge clusters 2 and 3
-    # sc_tcell_clust$immune_subcluster <- as.character(sc_tcell_clust$immune_subcluster)
-    # sc_tcell_clust$immune_subcluster[sc_tcell_clust$immune_subcluster == "3"] <- "2"
-    # sc_tcell_clust$immune_subcluster <- as.factor(sc_tcell_clust$immune_subcluster)
+    # Merge clusters 2 and 3
+    sc_tcell_clust$immune_subcluster <- as.character(sc_tcell_clust$immune_subcluster)
+    sc_tcell_clust$immune_subcluster[sc_tcell_clust$immune_subcluster == "2"] <- "1"
+    sc_tcell_clust$immune_subcluster <- as.factor(sc_tcell_clust$immune_subcluster)
     # # Create a mapping from old to new cluster numbers
     # current_levels <- sort(unique(as.character(sc_tcell_clust$immune_subcluster)))
     # new_levels <- as.character(seq_along(current_levels))
@@ -123,76 +123,41 @@ Tcell_annotation_analysis <- function(sc_tcell_clust) {
             mutate(across(where(is.numeric), round, 2)),
         "results/108.Tcell/immune_subcluster_expression.csv"
     )
+    # 计算并绘制热图
+    toplot <- CalcStats(sc_tcell_clust %>% filter(group == "normal"),
+        features = markers %>% unlist(),
+        method = "zscore", order = "value",
+        group.by = "immune_subcluster"
+    )
+
+    gene_groups <- rep(names(markers), lengths(markers)) %>%
+        setNames(markers %>% unlist()) %>%
+        .[rownames(toplot)]
+
+    p2 <- Heatmap(toplot, lab_fill = "zscore", facet_row = gene_groups) +
+        theme(plot.background = element_rect(fill = "white"))
+    ggsave("results/108.Tcell/sub_cluster_immune_heatmap_normal.png", p2, width = 8, height = 15)
+    write_csv(
+        toplot %>%
+            as.data.frame() %>%
+            rownames_to_column("gene") %>%
+            mutate(across(where(is.numeric), round, 2)),
+        "results/108.Tcell/immune_subcluster_expression_normal.csv"
+    )
 
     sc_tcell_clust
-    # # 按照数据集和亚群聚合进行DEG分析
-    # sc_pseudo <- AggregateExpression(sc_tcell_clust,
-    #     assays = "RNA",
-    #     return.seurat = TRUE,
-    #     group.by = c("dataset", "immune_subcluster")
-    # )
-
-    # # 设置比较分组
-    # Idents(sc_pseudo) <- "immune_subcluster"
-    # clusters <- unique(sc_tcell_clust$immune_subcluster)
-    # dir.create("results/108.Tcell/cluster_DEG", showWarnings = FALSE, recursive = TRUE)
-
-    # # # Setup parallel processing
-    # # library(foreach)
-    # # library(doParallel)
-    # num_cores <- parallel::detectCores() - 1
-    # registerDoParallel(cores = num_cores)
-
-    # # Compare each cluster with all other clusters in parallel
-    # foreach(cluster = clusters, .packages = c("Seurat", "tidyverse", "MAST")) %dopar% {
-    #     # DESeq2 analysis
-    #     deg <- FindMarkers(
-    #         sc_pseudo,
-    #         ident.1 = cluster,
-    #         test.use = "DESeq2",
-    #         min.cells.group = 2
-    #     ) %>%
-    #         rownames_to_column("gene") %>%
-    #         as_tibble() %>%
-    #         filter(p_val_adj < 0.05) %>%
-    #         filter((avg_log2FC > 0 & pct.1 > 0.2) | (avg_log2FC < 0 & pct.2 > 0.2)) %>%
-    #         arrange(desc(abs(avg_log2FC)))
-    #     write_tsv(deg, sprintf(
-    #         "results/108.Tcell/cluster_DEG/%s_vs_rest_DEG_psuedo.tsv",
-    #         cluster
-    #     ))
-
-    #     # MAST analysis
-    #     deg <- FindMarkers(
-    #         sc_tcell_clust,
-    #         ident.1 = cluster,
-    #         test.use = "MAST",
-    #         min.cells.group = 2
-    #     ) %>%
-    #         rownames_to_column("gene") %>%
-    #         as_tibble() %>%
-    #         filter(p_val_adj < 0.05) %>%
-    #         filter((avg_log2FC > 0 & pct.1 > 0.2) | (avg_log2FC < 0 & pct.2 > 0.2)) %>%
-    #         arrange(desc(abs(avg_log2FC)))
-
-    #     write_tsv(deg, sprintf(
-    #         "results/108.Tcell/cluster_DEG/%s_vs_rest_DEG_MAST.tsv",
-    #         cluster
-    #     ))
-    # }
-
-    # # Stop parallel processing
-    # stopImplicitCluster()
 }
 
 Tcell_annotate <- function(sc_tcell_clust) {
     cluster_map <- c(
-        "1" = "FOXP3-_Treg", # Regulatory T cells
-        "2" = "CD8_Tex_TRM", # Exhausted Tissue-Resident CD8+ T Cells
-        "3" = "CD4_Th17/Th2", # Th17/Th2-Hybrid CD4+ T Cells
-        "4" = "CD4_TN", # Naive CD4+ T cells
-        "5" = "CD8_Act_Treg", # Activated Regulatory CD8+ T Cells
-        "6" = "Cyto_gdT/CD8_CTL" # Cytotoxic Effector γδ T Cells / CD8+ CTLs
+        "1" = "CD4_Th17",
+        # "2" = "CD4_Treg",
+        "3" = "NKL_resting_T",
+        "4" = "CD8_Trm",
+        "5" = "CD4_TN", # Naive CD4+ T cells
+        "6" = "CD8_IFNG_gdT", # γδ T cells producing IFNγ
+        "7" = "CTLA4_Act_T (early)",
+        "8" = "CD8_Th2L_gdT" # γδ T cells with Th2-like features
     )
 
 
@@ -222,38 +187,66 @@ Tcell_annotate <- function(sc_tcell_clust) {
     # Save the plot
     ggsave("results/108.Tcell/tcell_annotated.png", p, width = 9, height = 6)
     markers <- list(
-        # Cluster 1: Regulatory T cells (Tregs)
-        "Tregs" = c("CTLA4", "FOXP3", "IL2RA"),
+        # Core T cell subtype markers
+        "CD4/8" = c("CD4", "CD8A", "CD8B"),
 
-        # Cluster 2: Exhausted Tissue-Resident CD8+ T cells (Tex-TRM)
-        "CD8_Tex_TRM" = c("ENTPD1", "HAVCR2", "ITGAE", "PDCD1"),
+        # Cluster 1: CD4+ Th17 cells
+        "CD4_Th17" = c("RORC", "CCR6", "IL17F"),
 
-        # Cluster 3: Th17/Th2 Hybrid CD4+ T cells
-        "CD4_Th17_Th2" = c("RORC", "GATA3", "IL13", "CCR6"),
+        # Cluster 5: Naive CD4+ T cells
+        "CD4_TN" = c("CCR7", "LEF1", "SELL"),
+        "Act_T (early)" = c("CTLA4"),
+        "NKL/Innate_T" = c("NCR3", "FCGR3A"),
+        # Cluster
+        "Trm" = c("CD69", "CXCR3", "ITGAE"),
 
-        # Cluster 4: Naive CD4+ T cells
-        "CD4_Naive" = c("CCR7", "LEF1", "SELL"),
+        # Cluster 6: γδ T cells producing IFNγ
+        "CD8_IFNG_gdT" = c("TRDV1", "IFNG"),
 
-        # Cluster 5: Activated CD8+ T cells with Regulatory Features
-        "CD8_Act_Reg" = c("CD8B", "CXCR3", "FOXP3", "CD69"),
+        # Cluster 8: γδ T cells with Th2-like features
+        "CD8_Th2L_gdT" = c("TRDV2", "IL13", "IL4")
+        # Cluster 3: Ambiguous T cells
 
-        # Cluster 6: Cytotoxic Effector Cells (γδ T cell-rich; CTL/γδ)
-        "Cyto_gdT_CTL" = c("IFNG", "GZMB", "TRDC", "NKG7", "NCAM1", "CD8A", "CD8B")
+        # # Cluster 4: CD8+ Regulatory T cells
+        # "CD8_Treg" = c("FOXP3", "CD69", "THEMIS", "CXCR3"),
     )
     # 计算并绘制热图
     toplot <- CalcStats(sc_tcell_clust,
         features = markers %>% unlist(),
         method = "zscore", order = "value", group.by = "cell_type_dtl"
     )
+    toplot <- toplot[, c("CD4_Th17", "CD4_TN", "CTLA4_Act_T (early)", "NKL_resting_T", "CD8_Trm", "CD8_IFNG_gdT", "CD8_Th2L_gdT")]
 
     gene_groups <- rep(names(markers), lengths(markers)) %>%
         setNames(markers %>% unlist()) %>%
-        .[rownames(toplot)]
-
+        .[rownames(toplot)] %>%
+        factor(levels = unique(rep(names(markers), lengths(markers))))
     p2 <- Heatmap(t(toplot), lab_fill = "zscore", facet_col = gene_groups) +
         theme(plot.background = element_rect(fill = "white"))
     ggsave("results/108.Tcell/tcell_annotated_heatmap.png", p2, width = 15, height = 8)
 
+    p <- DotPlot2(sc_tcell_clust,
+        features = markers,
+        group.by = "cell_type_dtl",
+        split.by = "group",
+        show_grid = FALSE
+    ) +
+        theme(plot.background = element_rect(fill = "white"))
+    ggsave("results/108.Tcell/tcell_annotated_dotplot.png", p, width = 15, height = 8)
+    # 计算并绘制热图
+    toplot <- CalcStats(sc_tcell_clust %>% filter(group == "normal"),
+        features = markers %>% unlist(),
+        method = "zscore", order = "value", group.by = "cell_type_dtl"
+    )
+    toplot <- toplot[, c("CD4_Th17", "CD4_TN", "CTLA4_Act_T (early)", "NKL_resting_T", "CD8_Trm", "CD8_IFNG_gdT", "CD8_Th2L_gdT")]
+
+    gene_groups <- rep(names(markers), lengths(markers)) %>%
+        setNames(markers %>% unlist()) %>%
+        .[rownames(toplot)] %>%
+        factor(levels = unique(rep(names(markers), lengths(markers))))
+    p2 <- Heatmap(t(toplot), lab_fill = "zscore", facet_col = gene_groups) +
+        theme(plot.background = element_rect(fill = "white"))
+    ggsave("results/108.Tcell/tcell_annotated_normal_heatmap.png", p2, width = 15, height = 8)
     markers <- list(
         # Core T Cell Markers
         "T_Cells" = c("CD3D", "CD3E", "CD3G"),
@@ -460,7 +453,7 @@ run_tcell_GSEA <- function(sc_tcell) {
     for (parent in parents) {
         dir.create(paste0("results/108.Tcell/GSEA/", parent), showWarnings = FALSE, recursive = TRUE)
         cat("Running GSEA for", parent, "\n")
-        sc_tcell <- GeneSetAnalysisGO(sc_tcell, nCores = 50, parent = parent, n.min = 3)
+        sc_tcell <- GeneSetAnalysisGO(sc_tcell, nCores = 20, parent = parent, n.min = 3)
         matr <- sc_tcell@misc$AUCell$GO[[parent]]
         matr <- RenameGO(matr, add_id = FALSE)
 
@@ -524,7 +517,7 @@ run_tcell_GSEA <- function(sc_tcell) {
     # Run for each GO root category
     for (root in c("BP", "MF", "CC")) {
         cat("Processing", root, "...\n")
-        sc_tcell <- GeneSetAnalysisGO(sc_tcell, nCores = 50, root = root, n.min = 3)
+        sc_tcell <- GeneSetAnalysisGO(sc_tcell, nCores = 20, root = root, n.min = 3)
         matr <- sc_tcell@misc$AUCell$GO[[root]]
 
         top30_pathways <- data.frame()

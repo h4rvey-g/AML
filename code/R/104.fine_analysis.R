@@ -63,7 +63,7 @@ run_palantir <- function(sc_final) {
         "MARCKS"
     ) # Cell adhesion and motility
 
-    # Top 15 downregulated genes contributing to mCAF differentiation
+    # Top 15 downregulated genes contributing to Fib differentiation
     genes_down <- c(
         "LINC02388", # Regulatory RNA
         "CYP11B1", # Metabolic regulation
@@ -185,8 +185,8 @@ cell_communication <- function(sc_final) {
         }
 
         liana_mod %<>%
-            rename(magnitude = !!magnitude) %>%
-            rename(specificity = !!specificity) %>%
+            dplyr::rename(magnitude = !!magnitude) %>%
+            dplyr::rename(specificity = !!specificity) %>%
             unite(entities, col = "interaction", sep = " -> ") %>%
             unite(c("source", "target"), col = "source_target", remove = FALSE)
 
@@ -295,7 +295,7 @@ cell_communication <- function(sc_final) {
             }
         )
     })
-    key_types <- c("Adipo", "mCAF", "PSC", "MSC", "Endo")
+    key_types <- c("Adipo", "Fib", "PSC", "MSC", "Endo")
     p <- liana_test %>%
         liana_dotplot(
             source_groups = c(key_types),
@@ -338,7 +338,7 @@ cell_communication <- function(sc_final) {
 run_nichenet <- function(sc_final) {
     # 1. Define receiver and sender cell populations
     receiver <- "Endo"
-    sender <- "mCAF"
+    sender <- "Fib"
     Idents(sc_final) <- "cell_type_dtl"
     expressed_genes_receiver <- get_expressed_genes(receiver, sc_final, pct = 0.05)
 

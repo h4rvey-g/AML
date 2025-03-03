@@ -123,7 +123,7 @@ run_GSEA <- function(sc_final) {
     # run analysis on every parent category
     for (parent in parents) {
         cat("Running GSEA for", parent, "\n")
-        sc_final <- GeneSetAnalysisGO(sc_final, nCores = 50, parent = parent)
+        sc_final <- GeneSetAnalysisGO(sc_final, nCores = 20, parent = parent)
         matr <- sc_final@misc$AUCell$GO[[parent]]
         matr <- RenameGO(matr, add_id = FALSE)
         p <- Heatmap(
@@ -425,11 +425,11 @@ plot_distribution <- function(sc_final, composition_test) {
     return("results/105.Distribution")
 }
 
-calculate_DEG_mCAF_vs_Others <- function(sc_filtered) {
+calculate_DEG_Fib_vs_Others <- function(sc_filtered) {
     sc_pseudo <- AggregateExpression(sc_filtered, assays = "RNA", return.seurat = T, group.by = c("group", "dataset", "cell_type_dtl"))
     sc_pseudo$cell_type_group <- paste(sc_pseudo$cell_type_dtl, sc_pseudo$group, sep = "_")
     Idents(sc_pseudo) <- "cell_type_group"
-    comparisons <- list(c("mCAF_tumor", "PSC_normal"), c("mCAF_tumor", "MSC_normal"))
+    comparisons <- list(c("Fib_tumor", "PSC_normal"), c("Fib_tumor", "MSC_normal"))
     for (comp in comparisons) {
         ident1 <- comp[1]
         ident2 <- comp[2]

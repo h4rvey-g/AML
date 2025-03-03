@@ -26,7 +26,7 @@ annotate_data <- function(sc_int, cell_type_path) {
         "CLC" = c("TH", "CHGA", "CHGB", "KIT"),
         "Endo" = c("PECAM1", "EMCN", "PLVAP", "CDH5", "KDR"),
         "PSC" = c("LUM", "TAGLN", "MGP", "AIFM2", "S100A4", "FAP"),
-        "mCAFs" = c("COL1A1", "COL1A2", "COL3A1", "POSTN", "TNC", "NT5E", "THY1", "MCAM"),
+        "Fibs" = c("COL1A1", "COL1A2", "COL3A1", "POSTN", "TNC", "NT5E", "THY1", "MCAM"),
         "MSC" = c("ENG", "NES", "STRIP1", "MFAP5", "KLF5", "EFNA5", "EMILIN3"),
         # "PSC_2_bd" = c("CCL19", "APOE", "CXCL2", "CXCL3", "EFEMP1"),
         # "PSC_3_gd" = c("LUM", "PDGFRA", "TAGLN", "MGP", "AIFM2", "S100A4", "FAP"),
@@ -42,7 +42,7 @@ annotate_data <- function(sc_int, cell_type_path) {
     # markers <- list(
     #     "PSC_3_gd" = c("LUM", "PDGFRA", "TAGLN", "MGP", "AIFM2", "S100A4", "FAP"),
     #     "Ret_PSC" = c("THY1", "FMO1", "MYOC", "LSP1",  "ACTA2", "PPARG", "CD36"),
-    #     "mCAFs" = c("COL1A1", "COL1A2", "COL3A1", "POSTN", "TNC"),
+    #     "Fibs" = c("COL1A1", "COL1A2", "COL3A1", "POSTN", "TNC"),
     #     "iCAFs" = c("MMP1", "MMP3", "IL6", "CXCL8", "IDO1"),
     #     "RGS5_positive" = c("RGS5", "KCNJ8", "MCAM", "TAGLN"),
     #     "vSMCs" = c("RERGL", "MYH11", "CNN1", "MCAM")
@@ -174,7 +174,7 @@ final_annotation <- function(sc_int, sc_sub_stero) {
         "CLC" = c("TH", "CHGA", "CHGB", "KIT", "SYT1"),
         "Endo" = c("PECAM1", "EMCN", "PLVAP", "CDH5", "KDR"),
         "PSC" = c("LUM", "TAGLN", "MGP", "AIFM2", "S100A4", "FAP"),
-        "mCAFs" = c("COL1A1", "COL1A2", "COL3A1", "POSTN", "TNC", "THY1", "ENG", "MCAM"),
+        "Fibs" = c("COL1A1", "COL1A2", "COL3A1", "POSTN", "TNC", "THY1", "ENG", "MCAM"),
         "MSC" = c("NT5E", "CD105", "NES", "CD106", "STRIP1", "MFAP5", "KLF5", "EFNA5", "EMILIN3"),
         # "PSC_2_bd" = c("CCL19", "APOE", "CXCL2", "CXCL3", "EFEMP1"),
         # "PSC_3_gd" = c("LUM", "PDGFRA", "TAGLN", "MGP", "AIFM2", "S100A4", "FAP"),
@@ -306,7 +306,7 @@ find_DEGs_pseudo_bulk <- function(sc_final) {
     # Idents(sc_pseudo) <- "cell_type_dtl"
     # deg <- FindMarkers(
     #     sc_pseudo,
-    #     ident.1 = "mCAF",
+    #     ident.1 = "Fib",
     #     ident.2 = "MSC",
     #     test.use = "DESeq2",
     #     min.cells.group = 2
