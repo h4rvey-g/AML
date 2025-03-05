@@ -6,13 +6,15 @@ tar_source(c(
     "code/R/103.DEG.R",
     "code/R/104.fine_analysis.R",
     "code/R/105.myeloid.R",
-    "code/R/106.Tcell.R"
+    "code/R/106.Tcell.R",
+    "code/R/107.paper_plot.R"
 ))
 tar_option_set(
     tidy_eval = FALSE,
     packages <- c(
         "tidyverse", "rliger", "Seurat", "reticulate", "SeuratExtend", "tidyseurat", "scCustomize", "patchwork", "tidyplots",
-        "liana", "SingleCellExperiment", "scDblFinder", "foreach", "doParallel", "scLink", "sccomp", "ggalign"
+        "liana", "SingleCellExperiment", "scDblFinder", "foreach", "doParallel", "scLink", "sccomp", "ggalign", "escape",
+        "RColorBrewer"
     ),
     controller = crew_controller_local(workers = 20, seconds_timeout = 6000),
     format = "qs",
@@ -64,6 +66,8 @@ list(
     tar_target(sc_mye_clust, sub_cluster_myeloid(sc_final)),
     tar_target(sc_mye_annotation, sub_annotation_myeloid(sc_mye_clust, sc_final)),
     tar_target(sc_mye, myeloid_annotate(sc_mye_annotation)),
+    tar_target(mye_cluster, unique(sc_mye$cell_type_dtl)),
+    tar_target(mye_DEG_cluster_path, myeloid_DEG_vs_cluster(sc_mye, mye_cluster), format = "file", pattern = map(mye_cluster)),
     tar_target(mye_composition_test, test_myeloid_composition(sc_mye)),
     tar_target(mye_distribution_path, plot_myeloid_distribution(sc_mye, mye_composition_test), format = "file"),
     tar_target(mye_GSEA_path, run_myeloid_GSEA(sc_mye), format = "file"),
@@ -78,5 +82,11 @@ list(
     tar_target(tcell_GSEA_path, run_tcell_GSEA(sc_tcell), format = "file"),
     tar_target(tcell_DEG_path, tcell_DEG_tumor_vs_normal(sc_tcell), format = "file"),
     tar_target(Tex_TRM_correlations, analyze_CD8_Tex_TRM_correlations(sc_tcell)),
-    tar_target(GSEA_Tex_TRM_path, run_GSEA_Tex_TRM(sc_tcell), format = "file")
+    tar_target(GSEA_Tex_TRM_path, run_GSEA_Tex_TRM(sc_tcell), format = "file"),
+
+    # paper plot
+    tar_target(paper_final_annotation_path, paper_final_annotation(sc_final, sc_mye_clust), format = "file"),
+    tar_target(paper_myeloid_annotate_path, paper_myeloid_annotate(sc_mye), format = "file"),
+    tar_target(paper_myeloid_lipid_DEG_path, paper_myeloid_lipid_DEG(sc_mye), format = "file"),
+    tar_target(paper_myeloid_GSEA_path, paper_myeloid_GSEA(sc_mye), format = "file")
 )

@@ -267,6 +267,53 @@ myeloid_annotate <- function(sc_mye_clust) {
     return(sc_mye_clust)
 }
 
+myeloid_DEG_vs_cluster <- function(sc_mye, myeloid_cluster) {
+    # 按照数据集和亚群聚合进行DEG分析
+    sc_pseudo <- AggregateExpression(sc_mye,
+        assays = "RNA",
+        return.seurat = TRUE,
+        group.by = c("dataset", "cell_type_dtl")
+    )
+
+    # 设置比较分组
+    Idents(sc_pseudo) <- "cell_type_dtl"
+    dir.create("results/107.myeloid/myeloid_DEG", showWarnings = FALSE, recursive = TRUE)
+    # if myeloid_cluster contains _, replace with -
+    myeloid_cluster <- gsub("_", "-", myeloid_cluster)
+
+    deg <- FindMarkers(
+        sc_pseudo,
+        ident.1 = myeloid_cluster,
+        test.use = "DESeq2",
+        min.cells.group = 2
+    ) %>%
+        rownames_to_column("gene") %>%
+        as_tibble() %>%
+        filter(p_val_adj < 0.05) %>%
+        filter((avg_log2FC > 0 & pct.1 > 0.2) | (avg_log2FC < 0 & pct.2 > 0.2)) %>%
+        arrange(desc(abs(avg_log2FC)))
+    if (nrow(deg) == 0) {
+        myeloid_cluster <- gsub("-", "_", myeloid_cluster)
+        Idents(sc_mye) <- "cell_type_dtl"
+        deg <- FindMarkers(
+            sc_mye,
+            ident.1 = myeloid_cluster,
+            test.use = "MAST",
+            min.cells.group = 2
+        ) %>%
+            rownames_to_column("gene") %>%
+            as_tibble() %>%
+            filter(p_val_adj < 0.05) %>%
+            filter((avg_log2FC > 0 & pct.1 > 0.2) | (avg_log2FC < 0 & pct.2 > 0.2)) %>%
+            arrange(desc(abs(avg_log2FC)))
+    }
+
+    write_tsv(deg, sprintf(
+        "results/107.myeloid/myeloid_DEG/%s_vs_rest_DEG.tsv",
+        myeloid_cluster
+    ))
+    "results/107.myeloid/myeloid_DEG"
+}
 test_myeloid_composition <- function(sc_mye) {
     # Create directory
     dir.create("results/107.myeloid/distribution", showWarnings = FALSE, recursive = TRUE)
@@ -690,7 +737,8 @@ myeloid_DEG_tumor_vs_normal <- function(sc_mye) {
                     as_tibble() %>%
                     filter(p_val_adj < 0.05) %>%
                     filter((avg_log2FC > 0 & pct.1 > 0.2) | (avg_log2FC < 0 & pct.2 > 0.2)) %>%
-                    arrange(desc(abs(avg_log2FC)))
+                    arrange(desc(abs(avg_log2FC))) %>% 
+                    filter(!str_starts(gene, "CYP"))
             },
             error = function(e) {
                 message("Error in FindMarkers for ", cell_type, ": ", e$message)
@@ -727,7 +775,8 @@ myeloid_DEG_tumor_vs_normal <- function(sc_mye) {
                 as_tibble() %>%
                 filter(p_val_adj < 0.05) %>%
                 filter((avg_log2FC > 0 & pct.1 > 0.2) | (avg_log2FC < 0 & pct.2 > 0.2)) %>%
-                arrange(desc(abs(avg_log2FC)))
+                arrange(desc(abs(avg_log2FC))) %>%
+                filter(!str_starts(gene, "CYP"))
             write_tsv(deg, paste0("results/107.myeloid/DEG_tumor_vs_normal/", cell_type, "_DEG_MAST.tsv"))
         }
     }
@@ -1091,7 +1140,7 @@ run_myeloid_trajectory_sep_group <- function(sc_mye, cell_group = NULL) {
     library(reticulate)
     py_run_string("")
     library(SeuratExtend)
-    
+
     # Filter by group if specified
     if (!is.null(cell_group)) {
         sc_mye <- sc_mye[, sc_mye$group == cell_group]
@@ -1102,7 +1151,7 @@ run_myeloid_trajectory_sep_group <- function(sc_mye, cell_group = NULL) {
         group_suffix <- ""
         output_dir <- "results/107.myeloid/trajectory"
     }
-    
+
     # remove eosinophils and mast
     sc_mye <- sc_mye %>%
         filter(cell_type_dtl != "Eosinophil" & cell_type_dtl != "Mast")
@@ -1112,7 +1161,7 @@ run_myeloid_trajectory_sep_group <- function(sc_mye, cell_group = NULL) {
     dir.create(paste0("data/107.myeloid/trajectory", group_suffix), showWarnings = FALSE, recursive = TRUE)
     adata_path <- paste0("data/107.myeloid/trajectory", group_suffix, "/myeloid", group_suffix, ".h5ad")
     Seu2Adata(sc_mye, save.adata = adata_path, conda_env = "base")
-    
+
     seu <- scVelo.SeuratToAnndata(
         sc_mye,
         filename = adata_path,
