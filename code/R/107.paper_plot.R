@@ -487,3 +487,181 @@ paper_myeloid_GSEA <- function(sc_mye) {
     # Return the path to the results directory
     return("results/109.paper/Fig2")
 }
+
+paper_tcell_exhaustion <- function(sc_tcell) {
+    ext_marker <- c("PDCD1", "CTLA4", "LAG3", "TIGIT", "HAVCR2", "ENTPD1")
+    p <- DotPlot2(sc_tcell,
+        features = ext_marker,
+        group.by = "cell_type_dtl",
+        split.by = "group",
+        show_grid = FALSE
+    ) +
+        theme(plot.background = element_rect(fill = "white"))
+    ggsave("results/109.paper/Fig3/tcell_exhaustion_dotplot.png", p, width = 10, height = 8)
+    "results/109.paper/Fig3"
+}
+
+paper_tcell_fate_DEG <- function(sc_tcell) {
+    # Set identity to cell_type_dtl for the comparison
+    Idents(sc_tcell) <- "cell_type_dtl"
+
+    # Perform differential expression analysis between CD8_IFNG_gdT and CD4_Th17
+    deg_results <- FindMarkers(
+        sc_tcell,
+        ident.1 = "CD8_IFNG_gdT",
+        ident.2 = "CD4_Th17",
+        test.use = "MAST",
+        min.pct = 0.1,
+        logfc.threshold = 0.25
+    ) %>%
+        rownames_to_column("gene") %>%
+        as_tibble() %>%
+        filter(p_val_adj < 0.05) %>%
+        filter((avg_log2FC > 0 & pct.1 > 0.2) | (avg_log2FC < 0 & pct.2 > 0.2)) %>%
+        arrange(desc(abs(avg_log2FC)))
+    # Add percent difference for visualization
+    deg_results <- Add_Pct_Diff(deg_results)
+
+    # Save full results to CSV
+    write.csv(deg_results, "results/109.paper/Fig3/CD8_IFNG_gdT_vs_CD4_Th17_DEG.csv", row.names = FALSE)
+
+    # Select top DEGs for visualization (top 10 up and down)
+    top_degs <- bind_rows(
+        deg_results %>% filter(avg_log2FC > 0) %>% arrange(desc(avg_log2FC)) %>% head(10),
+        deg_results %>% filter(avg_log2FC < 0) %>% arrange(avg_log2FC) %>% head(10)
+    )
+
+    # Create a volcano plot
+    p_volcano <- EnhancedVolcano(deg_results,
+        lab = deg_results$gene,
+        x = "avg_log2FC",
+        y = "p_val_adj",
+        title = "CD8_IFNG_gdT vs CD4_Th17",
+        subtitle = "Differential Expression",
+        pCutoff = 0.05,
+        FCcutoff = 0.5,
+        pointSize = 3.0,
+        labSize = 4.0,
+        colAlpha = 0.5,
+        legendPosition = "right",
+        drawConnectors = TRUE,
+        widthConnectors = 0.5,
+        colConnectors = "grey50"
+    ) +
+        theme(plot.background = element_rect(fill = "white"))
+
+    ggsave("results/109.paper/Fig3/tcell_fate_volcano.png", p_volcano, width = 10, height = 8)
+
+    # Create a heatmap of top DEGs
+    top_genes <- c(
+        top_degs %>% filter(avg_log2FC > 0) %>% pull(gene),
+        top_degs %>% filter(avg_log2FC < 0) %>% pull(gene)
+    )
+
+    # Calculate scaled expression of top DEGs
+    sc_subset <- subset(sc_tcell, cell_type_dtl %in% c("CD8_IFNG_gdT", "CD4_Th17"))
+    exp_data <- AverageExpression(sc_subset,
+        features = top_genes,
+        group.by = "cell_type_dtl",
+        assays = "RNA"
+    )$RNA
+
+    exp_data <- scale(exp_data)
+
+    # Set up annotation indicating which genes are upregulated in which cell type
+    gene_group <- ifelse(top_genes %in% (top_degs %>% filter(avg_log2FC > 0) %>% pull(gene)),
+        "Higher in CD8_IFNG_gdT", "Higher in CD4_Th17"
+    )
+
+    # Create a heatmap
+    ha <- rowAnnotation(
+        Group = gene_group,
+        col = list(Group = c(
+            "Higher in CD8_IFNG_gdT" = "#E41A1C",
+            "Higher in CD4_Th17" = "#377EB8"
+        ))
+    )
+
+    hm <- ComplexHeatmap::Heatmap(
+        exp_data,
+        name = "Scaled Expression",
+        cluster_rows = TRUE,
+        cluster_columns = FALSE,
+        show_row_names = TRUE,
+        show_column_names = TRUE,
+        row_split = gene_group,
+        right_annotation = ha
+    )
+
+    # Save the heatmap
+    png("results/109.paper/Fig3/tcell_fate_heatmap.png", width = 8, height = 10, units = "in", res = 300)
+    draw(hm)
+    dev.off()
+
+    # Generate a dot plot for selected genes
+    # Select biologically relevant genes for T cell fate and function
+    selected_genes <- list(
+        "Effector function" = c("IFNG", "GZMB", "GZMA", "PRF1", "NKG7"),
+        "T cell activation" = c("CD69", "IL2RA", "IL7R", "IL2RB"),
+        "T cell lineage" = c("CD8A", "CD8B", "CD4", "TRDV1", "TRDV2"),
+        "T helper" = c("IL17A", "IL22", "RORC", "TBX21", "GATA3")
+    )
+
+    p_dotplot <- DotPlot2(sc_tcell,
+        features = selected_genes,
+        group.by = "cell_type_dtl",
+        idents = c("CD8_IFNG_gdT", "CD4_Th17"),
+        show_grid = FALSE
+    ) +
+        theme(
+            plot.background = element_rect(fill = "white"),
+            axis.text.x = element_text(angle = 45, hjust = 1)
+        )
+
+    ggsave("results/109.paper/Fig3/tcell_fate_dotplot.png", p_dotplot, width = 10, height = 6)
+
+    # Return the path to the results directory
+    return("results/109.paper/Fig3")
+}
+
+paper_tcell_full_dotplot <- function(sc_tcell) {
+        markers <- list(
+            # Core T Cell Markers
+            "T_Cells" = c("CD3D", "CD3E", "CD3G"),
+            "CD4_T_Cells" = c("CD4"),
+            "CD8_T_Cells" = c("CD8A", "CD8B"),
+
+            # Specialized T Cell Subsets
+            "Tregs" = c("FOXP3", "IL2RA", "CTLA4", "TNFRSF18"),
+            "gdT_Cells" = c("TRDC", "TRGC1", "TRGC2", "TRDV1", "TRDV2"),
+            "NK_Cells" = c("NKG7", "GNLY", "KLRD1", "NCAM1", "FCGR3A", "NCR1", "NCR3", "KIR2DL1", "KIR2DL3", "KIR3DL1"),
+
+            # Naive and Memory Markers
+            "Naive_T" = c("CCR7", "SELL", "TCF7", "LEF1", "SKAP1", "THEMIS", "PTPRC"),
+            "Memory_T" = c("CD44", "IL7R", "PRKCQ", "STAT4"),
+
+            # Tissue-Resident Memory
+            "Trm" = c("ITGAE", "CD69", "CXCR6"),
+
+            # Effector Functions
+            "Effector" = c("GZMA", "GZMB", "GZMH", "GZMK", "PRF1", "TNF", "FASLG"),
+
+            # Exhaustion Markers
+            "Exhausted" = c("PDCD1", "LAG3", "TIGIT", "HAVCR2", "ENTPD1"),
+
+            # T Helper Subtypes and Key Transcription Factors
+            "Th1" = c("IFNG", "CXCR3", "TBX21"), # TBX21 (T-bet)
+            "Th2" = c("IL4", "IL5", "IL13", "CCR4", "GATA3"),
+            "Th17" = c("IL17F", "IL22", "CCR6", "RORC")
+        )
+        p <- DotPlot2(sc_tcell,
+            features = markers,
+            group.by = "cell_type_dtl",
+            split.by = "group",
+            # split.by.method = "color",
+            # split.by.colors = c("#4DBBD5FF", "#E64B35FF"),
+            show_grid = FALSE
+        ) +
+            theme(plot.background = element_rect(fill = "white"))
+        ggsave("results/109.paper/Fig3/tcell_full_dotplot.png", p, width = 8, height = 15)
+}

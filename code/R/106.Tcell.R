@@ -57,9 +57,9 @@ Tcell_annotation_analysis <- function(sc_tcell_clust, sc_final) {
     # sc_tcell_clust$immune_subcluster <- as.factor(sc_tcell_clust$immune_subcluster)
 
     # Merge clusters 2 and 3
-    sc_tcell_clust$immune_subcluster <- as.character(sc_tcell_clust$immune_subcluster)
-    sc_tcell_clust$immune_subcluster[sc_tcell_clust$immune_subcluster == "2"] <- "1"
-    sc_tcell_clust$immune_subcluster <- as.factor(sc_tcell_clust$immune_subcluster)
+    # sc_tcell_clust$immune_subcluster <- as.character(sc_tcell_clust$immune_subcluster)
+    # sc_tcell_clust$immune_subcluster[sc_tcell_clust$immune_subcluster == "2"] <- "1"
+    # sc_tcell_clust$immune_subcluster <- as.factor(sc_tcell_clust$immune_subcluster)
     # # Create a mapping from old to new cluster numbers
     # current_levels <- sort(unique(as.character(sc_tcell_clust$immune_subcluster)))
     # new_levels <- as.character(seq_along(current_levels))
@@ -151,7 +151,7 @@ Tcell_annotation_analysis <- function(sc_tcell_clust, sc_final) {
 Tcell_annotate <- function(sc_tcell_clust) {
     cluster_map <- c(
         "1" = "CD4_Th17",
-        # "2" = "CD4_Treg",
+        "2" = "CD4_Treg",
         "3" = "NKL_resting_T",
         "4" = "CD8_Trm",
         "5" = "CD4_TN", # Naive CD4+ T cells
@@ -558,87 +558,81 @@ run_tcell_GSEA <- function(sc_tcell) {
     return("results/108.Tcell/GSEA")
 }
 
-tcell_DEG_tumor_vs_normal <- function(sc_tcell) {
+tcell_DEG_tumor_vs_normal <- function(sc_tcell, t_cell_type) {
     sc_pseudo <- AggregateExpression(sc_tcell, assays = "RNA", return.seurat = T, group.by = c("group", "dataset", "cell_type_dtl"))
     sc_pseudo$cell_type_group <- paste(sc_pseudo$cell_type_dtl, sc_pseudo$group, sep = "_")
     Idents(sc_pseudo) <- "cell_type_group"
-    cell_types <- unique(sc_pseudo$cell_type_dtl)
 
     dir.create("results/108.Tcell/DEG_tumor_vs_normal", showWarnings = FALSE, recursive = TRUE)
 
     # DESeq2 analysis
-    for (cell_type in cell_types) {
-        ident1 <- paste0(cell_type, "_tumor")
-        ident2 <- paste0(cell_type, "_normal")
-        if (!(ident1 %in% Idents(sc_pseudo) && ident2 %in% Idents(sc_pseudo))) {
-            next
+    ident1 <- paste0(t_cell_type, "_tumor")
+    ident2 <- paste0(t_cell_type, "_normal")
+    # if (!(ident1 %in% Idents(sc_pseudo) && ident2 %in% Idents(sc_pseudo))) {
+    #     next
+    # }
+    deg <- tryCatch(
+        {
+            FindMarkers(
+                sc_pseudo,
+                ident.1 = ident1,
+                ident.2 = ident2,
+                test.use = "DESeq2",
+                min.cells.group = 2
+            ) %>%
+                Add_Pct_Diff() %>%
+                rownames_to_column("gene") %>%
+                as_tibble() %>%
+                filter(p_val_adj < 0.05) %>%
+                filter((avg_log2FC > 0 & pct.1 > 0.2) | (avg_log2FC < 0 & pct.2 > 0.2)) %>%
+                arrange(desc(abs(avg_log2FC))) %>%
+                filter(!str_starts(gene, "CYP")) %>%
+                filter(!str_starts(gene, "MT-"))
+        },
+        error = function(e) {
+            message("Error in FindMarkers for ", t_cell_type, ": ", e$message)
+            return(NULL)
         }
-        deg <- tryCatch(
-            {
-                FindMarkers(
-                    sc_pseudo,
-                    ident.1 = ident1,
-                    ident.2 = ident2,
-                    test.use = "DESeq2",
-                    min.cells.group = 2
-                ) %>%
-                    Add_Pct_Diff() %>%
-                    rownames_to_column("gene") %>%
-                    as_tibble() %>%
-                    filter(p_val_adj < 0.05) %>%
-                    filter((avg_log2FC > 0 & pct.1 > 0.2) | (avg_log2FC < 0 & pct.2 > 0.2)) %>%
-                    arrange(desc(abs(avg_log2FC)))
-            },
-            error = function(e) {
-                message("Error in FindMarkers for ", cell_type, ": ", e$message)
-                return(NULL)
-            }
-        )
+    )
 
-        if (!is.null(deg)) {
-            write_tsv(
-                deg %>%
-                    mutate(across(where(is.numeric), ~ ifelse(abs(.) < 0.001, signif(., 3), round(., 3)))),
-                paste0("results/108.Tcell/DEG_tumor_vs_normal/", gsub("/", "_", cell_type), "_DEG.tsv")
-            )
-        }
+    if (!is.null(deg)) {
+        write_tsv(
+            deg %>%
+                mutate(across(where(is.numeric), ~ ifelse(abs(.) < 0.001, signif(., 3), round(., 3)))),
+            paste0("results/108.Tcell/DEG_tumor_vs_normal/", gsub("/", "_", t_cell_type), "_DEG.tsv")
+        )
     }
 
     # MAST analysis with parallel processing
     sc_tcell$cell_type_group <- paste(sc_tcell$cell_type_dtl, sc_tcell$group, sep = "_")
     Idents(sc_tcell) <- "cell_type_group"
 
-    cores <- min(parallel::detectCores() - 1, length(cell_types))
-    cl <- parallel::makeCluster(cores)
-    doParallel::registerDoParallel(cl)
+    ident1 <- paste0(t_cell_type, "_tumor")
+    ident2 <- paste0(t_cell_type, "_normal")
+    if ((ident1 %in% Idents(sc_tcell) && ident2 %in% Idents(sc_tcell))) {
+        deg <- FindMarkers(
+            sc_tcell,
+            ident.1 = ident1,
+            ident.2 = ident2,
+            test.use = "MAST",
+            min.cells.group = 2
+        ) %>%
+            scCustomize::Add_Pct_Diff() %>%
+            rownames_to_column("gene") %>%
+            as_tibble() %>%
+            filter(p_val_adj < 0.05) %>%
+            filter((avg_log2FC > 0 & pct.1 > 0.2) | (avg_log2FC < 0 & pct.2 > 0.2)) %>%
+            arrange(desc(abs(avg_log2FC))) %>%
+            filter(!str_starts(gene, "CYP")) %>%
+            filter(!str_starts(gene, "MT-"))
 
-    foreach(cell_type = cell_types, .packages = c("Seurat", "tidyverse", "dplyr")) %dopar% {
-        ident1 <- paste0(cell_type, "_tumor")
-        ident2 <- paste0(cell_type, "_normal")
-        if ((ident1 %in% Idents(sc_tcell) && ident2 %in% Idents(sc_tcell))) {
-            deg <- FindMarkers(
-                sc_tcell,
-                ident.1 = ident1,
-                ident.2 = ident2,
-                test.use = "MAST",
-                min.cells.group = 2
-            ) %>%
-                scCustomize::Add_Pct_Diff() %>%
-                rownames_to_column("gene") %>%
-                as_tibble() %>%
-                filter(p_val_adj < 0.05) %>%
-                filter((avg_log2FC > 0 & pct.1 > 0.2) | (avg_log2FC < 0 & pct.2 > 0.2)) %>%
-                arrange(desc(abs(avg_log2FC)))
-
-            write_tsv(
-                deg %>%
-                    mutate(across(where(is.numeric), ~ ifelse(abs(.) < 0.001, signif(., 3), round(., 3)))),
-                paste0("results/108.Tcell/DEG_tumor_vs_normal/", gsub("/", "_", cell_type), "_DEG_MAST.tsv")
-            )
-        }
+        write_tsv(
+            deg %>%
+                mutate(across(where(is.numeric), ~ ifelse(abs(.) < 0.001, signif(., 3), round(., 3)))),
+            paste0("results/108.Tcell/DEG_tumor_vs_normal/", gsub("/", "_", t_cell_type), "_DEG_MAST.tsv")
+        )
     }
 
-    parallel::stopCluster(cl)
     return("results/108.Tcell/DEG_tumor_vs_normal")
 }
 
@@ -812,24 +806,24 @@ run_tcell_trajectory <- function(sc_tcell) {
     Seu2Adata(sc_tcell, save.adata = "data/108.Tcell/trajectory/tcell.h5ad", conda_env = "base")
     adata_path <- "data/108.Tcell/trajectory/tcell.h5ad"
     seu <- sc_tcell
-    # seu <- scVelo.SeuratToAnndata(
-    #     sc_tcell,
-    #     filename = adata_path,
-    #     velocyto.loompath = "data/103.self_workflow/velocyto_combined.loom",
-    #     prefix = "",
-    #     postfix = "",
-    #     remove_duplicates = TRUE,
-    #     conda_env = "base"
-    # )
+    seu <- scVelo.SeuratToAnndata(
+        sc_tcell,
+        filename = adata_path,
+        velocyto.loompath = "data/103.self_workflow/velocyto_combined.loom",
+        prefix = "",
+        postfix = "",
+        remove_duplicates = TRUE,
+        conda_env = "base"
+    )
 
-    # # Generate velocity plots
-    # scVelo.Plot(
-    #     color = "cell_type_dtl",
-    #     basis = "umap_tcell_cell_embeddings",
-    #     save = "results/108.Tcell/trajectory/velocity_umap.png",
-    #     figsize = c(7, 6),
-    #     conda_env = "base"
-    # )
+    # Generate velocity plots
+    scVelo.Plot(
+        color = "cell_type_dtl",
+        basis = "umap_tcell_cell_embeddings",
+        save = "results/108.Tcell/trajectory/velocity_umap.png",
+        figsize = c(7, 6),
+        conda_env = "base"
+    )
 
     # 2. Palantir Analysis
     # Run diffusion map
@@ -867,13 +861,18 @@ run_tcell_trajectory <- function(sc_tcell) {
     # )
 
     # Select start cell (CD4_TN cluster)
-    p <- DimPlot(seu %>% subset(cell_type_dtl == "CD4_TN"), reduction = "ms", group.by = "cell_type_dtl", label = TRUE, repel = TRUE) +
+    p <- DimPlot(seu, reduction = "ms", group.by = "cell_type_dtl", label = TRUE, repel = TRUE) +
         theme(plot.background = element_rect(fill = "white"))
     start_cell <- CellSelector(p)
     start_cell <- colnames(seu)[which(seu$cell_type_dtl == "CD4_TN")[1]]
+    fate1_cell <- CellSelector(p)
+    fate2_cell <- CellSelector(p)
 
     # Calculate pseudotime
-    seu <- Palantir.Pseudotime(seu, start_cell = start_cell, conda_env = "base", n_jobs = 10)
+    seu <- Palantir.Pseudotime(seu,
+        start_cell = start_cell, conda_env = "base", n_jobs = 10,
+        terminal_states = c("fate1" = fate1_cell, "fate2" = fate2_cell)
+    )
 
     # Get pseudotime data
     ps <- seu@misc$Palantir$Pseudotime
