@@ -16,14 +16,14 @@ paper_final_annotation <- function(sc_final, sc_mye_clust) {
         "ZG" = c("NR5A1", "DACH1", "CYP11B2"),
         "ZG/ZF" = c("NR5A1", "NOV", "NCAM1"),
         "ZR" = c("NR5A1", "CYB5A", "SULT2A1"),
-        "CLC" = c("TH", "CHGA", "CHGB"),
+        "CLC" = c("TH", "CHGA"),
         "Endo" = c("PECAM1", "EMCN"),
         "Fib" = c("COL1A1", "COL3A1", "THY1"),
         "PSC" = c("RGS5", "PDGFRB"),
         "Adipo" = c("ADIPOQ", "FABP4", "PPARG"),
         "Tcell" = c("CD3D", "CD3E", "TRBC1"),
         "Bcell" = c("CD19", "CD79A", "MS4A1"),
-        "Myeloid" = c("ITGAM", "CD33", "ANPEP"),
+        "Myeloid" = c("ITGAM", "CD33"),
         "Plasma" = c("CD38", "SDC1", "IGHG1"),
         "LEC" = c("PDPN", "PROX1", "NR2F2"),
         "Eryth" = c("HBB", "GYPA", "SLC4A1")
@@ -39,9 +39,209 @@ paper_final_annotation <- function(sc_final, sc_mye_clust) {
     ) +
         theme(plot.background = element_rect(fill = "white"))
     ggsave("results/109.paper/Fig1/final_annotation_dotplot.png", p, width = 7, height = 7)
+    # Get expression stats for tumor samples
+    toplot_tumor <- CalcStats(sc_final %>% filter(group == "tumor"),
+        features = markers %>% unlist(),
+        group.by = "cell_type_dtl",
+        method = "zscore",
+        order = "value"
+    )
+
+    # Get expression stats for normal samples
+    toplot_normal <- CalcStats(sc_final %>% filter(group == "normal"),
+        features = markers %>% unlist(),
+        group.by = "cell_type_dtl",
+        method = "zscore",
+        order = "value"
+    )
+
+    # Create gene group annotations
+    gene_groups <- rep(names(markers), lengths(markers)) %>%
+        setNames(markers %>% unlist())
+
+    # For tumor plot
+    gene_groups_tumor <- gene_groups[rownames(toplot_tumor)]
+    p_tumor <- Heatmap(t(toplot_tumor),
+        lab_fill = "zscore",
+        facet_col = gene_groups_tumor
+    ) +
+        ggtitle("Tumor") +
+        theme(plot.background = element_rect(fill = "white"))
+
+    # For normal plot
+    gene_groups_normal <- gene_groups[rownames(toplot_normal)]
+    p_normal <- Heatmap(t(toplot_normal),
+        lab_fill = "zscore",
+        facet_col = gene_groups_normal
+    ) +
+        ggtitle("Normal") +
+        theme(plot.background = element_rect(fill = "white"))
+
+    # Combined plot for all samples
+    toplot <- CalcStats(sc_final,
+        features = markers %>% unlist(),
+        group.by = "cell_type_dtl",
+        method = "zscore",
+        order = "value"
+    )
+
+    gene_groups_all <- gene_groups[rownames(toplot)]
+    p_all <- Heatmap(t(toplot),
+        lab_fill = "zscore",
+        facet_col = gene_groups_all
+    ) +
+        ggtitle("All Samples") +
+        theme(plot.background = element_rect(fill = "white"))
+    # Create a combined plot (vertically stacked)
+    p_combined <- p_tumor / p_normal
+
+    # Save all plots
+    ggsave("results/109.paper/Fig1/final_annotation_heatmap_tumor.png", p_tumor, width = 14, height = 5)
+    ggsave("results/109.paper/Fig1/final_annotation_heatmap_normal.png", p_normal, width = 14, height = 5)
+    ggsave("results/109.paper/Fig1/final_annotation_heatmap_combined.png", p_combined, width = 14, height = 10)
+    ggsave("results/109.paper/Fig1/final_annotation_heatmap.png", p_all, width = 14, height = 7)
     "results/109.paper/Fig1"
 }
+paper_clc_expression_by_sample <- function(sc_final) {
+    # Create directory for results
+    dir.create("results/109.paper/Fig1/CLC", recursive = TRUE, showWarnings = FALSE)
 
+    # Define CLC markers
+    clc_markers <- c("TH", "CHGA", "CHGB")
+    p <- VlnPlot2(sc_final %>% filter(cell_type_dtl == "CLC"),
+        features = clc_markers,
+        group.by = "dataset",
+        violin = FALSE, pt.style = "quasirandom", ncol = 1
+    ) +
+        theme(plot.background = element_rect(fill = "white"))
+    ggsave("results/109.paper/Fig1/CLC/clc_expression_by_sample_violinplot.png", p, width = 6, height = 15)
+    p <- VlnPlot2(sc_final,
+        features = clc_markers,
+        group.by = "dataset",
+        violin = FALSE, pt.style = "quasirandom", ncol = 1
+    ) +
+        theme(plot.background = element_rect(fill = "white"))
+    ggsave("results/109.paper/Fig1/CLC/clc_expression_by_sample_all_violinplot.png", p, width = 6, height = 15)
+    p <- VlnPlot2(sc_final %>% filter(group == "tumor"),
+        features = clc_markers,
+        group.by = "cell_type_dtl",
+        violin = FALSE, pt.style = "quasirandom", ncol = 1
+    ) +
+        theme(plot.background = element_rect(fill = "white"))
+    ggsave("results/109.paper/Fig1/CLC/clc_expression_by_sample_tumor_violinplot.png", p, width = 6, height = 15)
+    p <- VlnPlot2(sc_final %>% filter(group == "normal"),
+        features = clc_markers,
+        group.by = "cell_type_dtl",
+        violin = FALSE, pt.style = "quasirandom", ncol = 1
+    ) +
+        theme(plot.background = element_rect(fill = "white"))
+    ggsave("results/109.paper/Fig1/CLC/clc_expression_by_sample_normal_violinplot.png", p, width = 6, height = 15)
+    # Find DEGs for CLC vs rest in normal and tumor samples separately
+    # Create directory for DEG results
+    deg_dir <- file.path("results/109.paper/Fig1/CLC", "DEGs")
+    dir.create(deg_dir, recursive = TRUE, showWarnings = FALSE)
+
+    # Set identity to cell_type_dtl for comparison
+    Idents(sc_final) <- "cell_type_dtl"
+
+    # Find DEGs for CLC vs rest in normal samples
+    message("Finding DEGs for CLC vs rest in normal samples...")
+    normal_degs <- FindMarkers(
+        sc_final %>% filter(group == "normal"),
+        ident.1 = "CLC",
+        test.use = "MAST",
+        min.cells.group = 2
+    ) %>%
+        Add_Pct_Diff() %>%
+        rownames_to_column("gene") %>%
+        as_tibble() %>%
+        filter(p_val_adj < 0.05) %>%
+        filter((avg_log2FC > 0 & pct.1 > 0.2) | (avg_log2FC < 0 & pct.2 > 0.2)) %>%
+        arrange(desc(abs(avg_log2FC)))
+    # Save normal DEGs
+    write.csv(normal_degs, file.path(deg_dir, "CLC_vs_rest_normal_DEGs.csv"), row.names = FALSE)
+
+    # Find DEGs for CLC vs rest in tumor samples
+    message("Finding DEGs for CLC vs rest in tumor samples...")
+    tumor_degs <- FindMarkers(
+        sc_final %>% filter(group == "tumor"),
+        ident.1 = "CLC",
+        test.use = "MAST",
+        min.cells.group = 2
+    ) %>%
+        Add_Pct_Diff() %>%
+        rownames_to_column("gene") %>%
+        as_tibble() %>%
+        filter(p_val_adj < 0.05) %>%
+        filter((avg_log2FC > 0 & pct.1 > 0.2) | (avg_log2FC < 0 & pct.2 > 0.2)) %>%
+        arrange(desc(abs(avg_log2FC)))
+
+    # Save tumor DEGs
+    write.csv(tumor_degs, file.path(deg_dir, "CLC_vs_rest_tumor_DEGs.csv"), row.names = FALSE)
+
+    # Add pseudobulk analysis
+    message("Performing pseudobulk analysis for more robust DEG identification...")
+
+    # Create pseudobulk for normal samples
+    normal_pseudo <- sc_final %>%
+        filter(group == "normal") %>%
+        AggregateExpression(
+            assays = "RNA",
+            return.seurat = TRUE,
+            group.by = c("dataset", "cell_type_dtl")
+        )
+
+    # Set identity for comparison
+    Idents(normal_pseudo) <- "cell_type_dtl"
+
+    # Find DEGs using DESeq2 on pseudobulk data for normal samples
+    normal_pseudo_degs <- FindMarkers(
+        normal_pseudo,
+        ident.1 = "CLC",
+        test.use = "DESeq2",
+        min.cells.group = 2
+    ) %>%
+        rownames_to_column("gene") %>%
+        as_tibble() %>%
+        filter(p_val_adj < 0.05) %>%
+        arrange(desc(abs(avg_log2FC)))
+
+    # Save normal pseudobulk DEGs
+    write.csv(normal_pseudo_degs, file.path(deg_dir, "CLC_vs_rest_normal_pseudobulk_DEGs.csv"), row.names = FALSE)
+
+    # Create pseudobulk for tumor samples
+    tumor_pseudo <- sc_final %>%
+        filter(group == "tumor") %>%
+        AggregateExpression(
+            assays = "RNA",
+            return.seurat = TRUE,
+            group.by = c("dataset", "cell_type_dtl")
+        )
+
+    # Set identity for comparison
+    Idents(tumor_pseudo) <- "cell_type_dtl"
+
+    # Find DEGs using DESeq2 on pseudobulk data for tumor samples
+    tumor_pseudo_degs <- FindMarkers(
+        tumor_pseudo,
+        ident.1 = "CLC",
+        test.use = "DESeq2",
+        min.cells.group = 2
+    ) %>%
+        rownames_to_column("gene") %>%
+        as_tibble() %>%
+        filter(p_val_adj < 0.05) %>%
+        arrange(desc(abs(avg_log2FC)))
+
+    # Save tumor pseudobulk DEGs
+    write.csv(tumor_pseudo_degs, file.path(deg_dir, "CLC_vs_rest_tumor_pseudobulk_DEGs.csv"), row.names = FALSE)
+
+    # Save tumor DEGs
+    # write.csv(tumor_degs, file.path(deg_dir, "CLC_vs_rest_tumor_DEGs.csv"), row.names = FALSE)
+
+    # Return results directory
+    return("results/109.paper/Fig1/CLC")
+}
 paper_myeloid_annotate <- function(sc_mye) {
     markers <- list(
         "PMP" = c("AXL", "LYVE1", "CD34", "HLA-DQB1"), # Tissue-Resident Macrophages
@@ -503,13 +703,14 @@ paper_tcell_exhaustion <- function(sc_tcell) {
 
 paper_tcell_fate_DEG <- function(sc_tcell) {
     # Set identity to cell_type_dtl for the comparison
+    sc_tcell <- sc_tcell %>% filter(group == "tumor")
     Idents(sc_tcell) <- "cell_type_dtl"
 
     # Perform differential expression analysis between CD8_IFNG_gdT and CD4_Th17
     deg_results <- FindMarkers(
         sc_tcell,
-        ident.1 = "CD8_IFNG_gdT",
-        ident.2 = "CD4_Th17",
+        ident.1 = "CD8_Cyto_gdT",
+        ident.2 = "CD4_Treg/Th17",
         test.use = "MAST",
         min.pct = 0.1,
         logfc.threshold = 0.25
@@ -518,150 +719,379 @@ paper_tcell_fate_DEG <- function(sc_tcell) {
         as_tibble() %>%
         filter(p_val_adj < 0.05) %>%
         filter((avg_log2FC > 0 & pct.1 > 0.2) | (avg_log2FC < 0 & pct.2 > 0.2)) %>%
-        arrange(desc(abs(avg_log2FC)))
-    # Add percent difference for visualization
-    deg_results <- Add_Pct_Diff(deg_results)
+        arrange(desc(abs(avg_log2FC))) %>%
+        Add_Pct_Diff()
 
     # Save full results to CSV
-    write.csv(deg_results, "results/109.paper/Fig3/CD8_IFNG_gdT_vs_CD4_Th17_DEG.csv", row.names = FALSE)
-
-    # Select top DEGs for visualization (top 10 up and down)
-    top_degs <- bind_rows(
-        deg_results %>% filter(avg_log2FC > 0) %>% arrange(desc(avg_log2FC)) %>% head(10),
-        deg_results %>% filter(avg_log2FC < 0) %>% arrange(avg_log2FC) %>% head(10)
+    write.csv(deg_results, "results/109.paper/Fig3/CD8_Cyto_gdT_vs_CD4_TregTh17_MAST_DEG.csv", row.names = FALSE)
+    # Create a pseudobulk object for more robust differential expression analysis
+    sc_pseudo <- AggregateExpression(sc_tcell,
+        assays = "RNA",
+        return.seurat = TRUE,
+        group.by = c("dataset", "cell_type_dtl")
     )
 
-    # Create a volcano plot
-    p_volcano <- EnhancedVolcano(deg_results,
-        lab = deg_results$gene,
-        x = "avg_log2FC",
-        y = "p_val_adj",
-        title = "CD8_IFNG_gdT vs CD4_Th17",
-        subtitle = "Differential Expression",
-        pCutoff = 0.05,
-        FCcutoff = 0.5,
-        pointSize = 3.0,
-        labSize = 4.0,
-        colAlpha = 0.5,
-        legendPosition = "right",
-        drawConnectors = TRUE,
-        widthConnectors = 0.5,
-        colConnectors = "grey50"
-    ) +
-        theme(plot.background = element_rect(fill = "white"))
+    Idents(sc_pseudo) <- "cell_type_dtl"
 
-    ggsave("results/109.paper/Fig3/tcell_fate_volcano.png", p_volcano, width = 10, height = 8)
+    # Define identities for comparison
+    ident1 <- "CD8-Cyto-gdT"
+    ident2 <- "CD4-Treg/Th17"
 
-    # Create a heatmap of top DEGs
-    top_genes <- c(
-        top_degs %>% filter(avg_log2FC > 0) %>% pull(gene),
-        top_degs %>% filter(avg_log2FC < 0) %>% pull(gene)
+    # Run DESeq2 analysis on the pseudobulk data
+    pseudo_deg <-
+        FindMarkers(
+            sc_pseudo,
+            ident.1 = ident1,
+            ident.2 = ident2,
+            test.use = "DESeq2",
+            min.cells.group = 2
+        ) %>%
+        Add_Pct_Diff() %>%
+        rownames_to_column("gene") %>%
+        as_tibble() %>%
+        filter(p_val_adj < 0.05) %>%
+        # filter((avg_log2FC > 0 & pct.1 > 0.2) | (avg_log2FC < 0 & pct.2 > 0.2)) %>%
+        arrange(desc(abs(avg_log2FC))) %>%
+        filter(!str_starts(gene, "CYP")) %>%
+        filter(!str_starts(gene, "MT-"))
+    write_tsv(
+        pseudo_deg %>%
+            mutate(across(where(is.numeric), ~ ifelse(abs(.) < 0.001, signif(., 3), round(., 3)))),
+        "results/109.paper/Fig3/CD8_Cyto_gdT_vs_CD4_TregTh17_pseudobulk_DEG.tsv"
     )
 
-    # Calculate scaled expression of top DEGs
-    sc_subset <- subset(sc_tcell, cell_type_dtl %in% c("CD8_IFNG_gdT", "CD4_Th17"))
-    exp_data <- AverageExpression(sc_subset,
-        features = top_genes,
-        group.by = "cell_type_dtl",
-        assays = "RNA"
-    )$RNA
+    # Save pseudobulk DEG results if successful
 
-    exp_data <- scale(exp_data)
+    # # Select top DEGs for visualization (top 10 up and down)
+    # top_degs <- bind_rows(
+    #     deg_results %>% filter(avg_log2FC > 0) %>% arrange(desc(avg_log2FC)) %>% head(10),
+    #     deg_results %>% filter(avg_log2FC < 0) %>% arrange(avg_log2FC) %>% head(10)
+    # )
 
-    # Set up annotation indicating which genes are upregulated in which cell type
-    gene_group <- ifelse(top_genes %in% (top_degs %>% filter(avg_log2FC > 0) %>% pull(gene)),
-        "Higher in CD8_IFNG_gdT", "Higher in CD4_Th17"
-    )
+    # # Create a volcano plot
+    # p_volcano <- EnhancedVolcano(deg_results,
+    #     lab = deg_results$gene,
+    #     x = "avg_log2FC",
+    #     y = "p_val_adj",
+    #     title = "CD8_IFNG_gdT vs CD4_Th17",
+    #     subtitle = "Differential Expression",
+    #     pCutoff = 0.05,
+    #     FCcutoff = 0.5,
+    #     pointSize = 3.0,
+    #     labSize = 4.0,
+    #     colAlpha = 0.5,
+    #     legendPosition = "right",
+    #     drawConnectors = TRUE,
+    #     widthConnectors = 0.5,
+    #     colConnectors = "grey50"
+    # ) +
+    #     theme(plot.background = element_rect(fill = "white"))
 
-    # Create a heatmap
-    ha <- rowAnnotation(
-        Group = gene_group,
-        col = list(Group = c(
-            "Higher in CD8_IFNG_gdT" = "#E41A1C",
-            "Higher in CD4_Th17" = "#377EB8"
-        ))
-    )
+    # ggsave("results/109.paper/Fig3/tcell_fate_volcano.png", p_volcano, width = 10, height = 8)
 
-    hm <- ComplexHeatmap::Heatmap(
-        exp_data,
-        name = "Scaled Expression",
-        cluster_rows = TRUE,
-        cluster_columns = FALSE,
-        show_row_names = TRUE,
-        show_column_names = TRUE,
-        row_split = gene_group,
-        right_annotation = ha
-    )
+    # # Create a heatmap of top DEGs
+    # top_genes <- c(
+    #     top_degs %>% filter(avg_log2FC > 0) %>% pull(gene),
+    #     top_degs %>% filter(avg_log2FC < 0) %>% pull(gene)
+    # )
 
-    # Save the heatmap
-    png("results/109.paper/Fig3/tcell_fate_heatmap.png", width = 8, height = 10, units = "in", res = 300)
-    draw(hm)
-    dev.off()
+    # # Calculate scaled expression of top DEGs
+    # sc_subset <- subset(sc_tcell, cell_type_dtl %in% c("CD8_IFNG_gdT", "CD4_Th17"))
+    # exp_data <- AverageExpression(sc_subset,
+    #     features = top_genes,
+    #     group.by = "cell_type_dtl",
+    #     assays = "RNA"
+    # )$RNA
 
-    # Generate a dot plot for selected genes
-    # Select biologically relevant genes for T cell fate and function
-    selected_genes <- list(
-        "Effector function" = c("IFNG", "GZMB", "GZMA", "PRF1", "NKG7"),
-        "T cell activation" = c("CD69", "IL2RA", "IL7R", "IL2RB"),
-        "T cell lineage" = c("CD8A", "CD8B", "CD4", "TRDV1", "TRDV2"),
-        "T helper" = c("IL17A", "IL22", "RORC", "TBX21", "GATA3")
-    )
+    # exp_data <- scale(exp_data)
 
-    p_dotplot <- DotPlot2(sc_tcell,
-        features = selected_genes,
-        group.by = "cell_type_dtl",
-        idents = c("CD8_IFNG_gdT", "CD4_Th17"),
-        show_grid = FALSE
-    ) +
-        theme(
-            plot.background = element_rect(fill = "white"),
-            axis.text.x = element_text(angle = 45, hjust = 1)
-        )
+    # # Set up annotation indicating which genes are upregulated in which cell type
+    # gene_group <- ifelse(top_genes %in% (top_degs %>% filter(avg_log2FC > 0) %>% pull(gene)),
+    #     "Higher in CD8_IFNG_gdT", "Higher in CD4_Th17"
+    # )
 
-    ggsave("results/109.paper/Fig3/tcell_fate_dotplot.png", p_dotplot, width = 10, height = 6)
+    # # Create a heatmap
+    # ha <- rowAnnotation(
+    #     Group = gene_group,
+    #     col = list(Group = c(
+    #         "Higher in CD8_IFNG_gdT" = "#E41A1C",
+    #         "Higher in CD4_Th17" = "#377EB8"
+    #     ))
+    # )
+
+    # hm <- ComplexHeatmap::Heatmap(
+    #     exp_data,
+    #     name = "Scaled Expression",
+    #     cluster_rows = TRUE,
+    #     cluster_columns = FALSE,
+    #     show_row_names = TRUE,
+    #     show_column_names = TRUE,
+    #     row_split = gene_group,
+    #     right_annotation = ha
+    # )
+
+    # # Save the heatmap
+    # png("results/109.paper/Fig3/tcell_fate_heatmap.png", width = 8, height = 10, units = "in", res = 300)
+    # draw(hm)
+    # dev.off()
+
+    # # Generate a dot plot for selected genes
+    # # Select biologically relevant genes for T cell fate and function
+    # selected_genes <- list(
+    #     "Effector function" = c("IFNG", "GZMB", "GZMA", "PRF1", "NKG7"),
+    #     "T cell activation" = c("CD69", "IL2RA", "IL7R", "IL2RB"),
+    #     "T cell lineage" = c("CD8A", "CD8B", "CD4", "TRDV1", "TRDV2"),
+    #     "T helper" = c("IL17A", "IL22", "RORC", "TBX21", "GATA3")
+    # )
+
+    # p_dotplot <- DotPlot2(sc_tcell,
+    #     features = selected_genes,
+    #     group.by = "cell_type_dtl",
+    #     idents = c("CD8_IFNG_gdT", "CD4_Th17"),
+    #     show_grid = FALSE
+    # ) +
+    #     theme(
+    #         plot.background = element_rect(fill = "white"),
+    #         axis.text.x = element_text(angle = 45, hjust = 1)
+    #     )
+
+    # ggsave("results/109.paper/Fig3/tcell_fate_dotplot.png", p_dotplot, width = 10, height = 6)
 
     # Return the path to the results directory
     return("results/109.paper/Fig3")
 }
 
 paper_tcell_full_dotplot <- function(sc_tcell) {
-        markers <- list(
-            # Core T Cell Markers
-            "T_Cells" = c("CD3D", "CD3E", "CD3G"),
-            "CD4_T_Cells" = c("CD4"),
-            "CD8_T_Cells" = c("CD8A", "CD8B"),
+    markers <- list(
+        # Core T Cell Markers
+        "T_Cells" = c("CD3D", "CD3E", "CD3G"),
+        "CD4_T_Cells" = c("CD4"),
+        "CD8_T_Cells" = c("CD8A", "CD8B"),
 
-            # Specialized T Cell Subsets
-            "Tregs" = c("FOXP3", "IL2RA", "CTLA4", "TNFRSF18"),
-            "gdT_Cells" = c("TRDC", "TRGC1", "TRGC2", "TRDV1", "TRDV2"),
-            "NK_Cells" = c("NKG7", "GNLY", "KLRD1", "NCAM1", "FCGR3A", "NCR1", "NCR3", "KIR2DL1", "KIR2DL3", "KIR3DL1"),
+        # Specialized T Cell Subsets
+        "Tregs" = c("FOXP3", "IL2RA", "CTLA4", "TNFRSF18"),
+        "gdT_Cells" = c("TRDC", "TRGC1", "TRGC2", "TRDV1", "TRDV2"),
+        "NK_Cells" = c("NKG7", "GNLY", "KLRD1", "NCAM1", "FCGR3A", "NCR1", "NCR3", "KIR2DL1", "KIR2DL3", "KIR3DL1"),
 
-            # Naive and Memory Markers
-            "Naive_T" = c("CCR7", "SELL", "TCF7", "LEF1", "SKAP1", "THEMIS", "PTPRC"),
-            "Memory_T" = c("CD44", "IL7R", "PRKCQ", "STAT4"),
+        # Naive and Memory Markers
+        "Naive_T" = c("CCR7", "SELL", "TCF7", "LEF1", "SKAP1", "THEMIS", "PTPRC"),
+        "Memory_T" = c("CD44", "IL7R", "PRKCQ", "STAT4"),
 
-            # Tissue-Resident Memory
-            "Trm" = c("ITGAE", "CD69", "CXCR6"),
+        # Tissue-Resident Memory
+        "Trm" = c("ITGAE", "CD69", "CXCR6"),
 
-            # Effector Functions
-            "Effector" = c("GZMA", "GZMB", "GZMH", "GZMK", "PRF1", "TNF", "FASLG"),
+        # Effector Functions
+        "Effector" = c("GZMA", "GZMB", "GZMH", "GZMK", "PRF1", "TNF", "FASLG"),
 
-            # Exhaustion Markers
-            "Exhausted" = c("PDCD1", "LAG3", "TIGIT", "HAVCR2", "ENTPD1"),
+        # Exhaustion Markers
+        "Exhausted" = c("PDCD1", "LAG3", "TIGIT", "HAVCR2", "ENTPD1"),
 
-            # T Helper Subtypes and Key Transcription Factors
-            "Th1" = c("IFNG", "CXCR3", "TBX21"), # TBX21 (T-bet)
-            "Th2" = c("IL4", "IL5", "IL13", "CCR4", "GATA3"),
-            "Th17" = c("IL17F", "IL22", "CCR6", "RORC")
+        # T Helper Subtypes and Key Transcription Factors
+        "Th1" = c("IFNG", "CXCR3", "TBX21"), # TBX21 (T-bet)
+        "Th2" = c("IL4", "IL5", "IL13", "CCR4", "GATA3"),
+        "Th17" = c("IL17F", "IL22", "CCR6", "RORC")
+    )
+    p <- DotPlot2(sc_tcell,
+        features = markers,
+        group.by = "cell_type_dtl",
+        split.by = "group",
+        # split.by.method = "color",
+        # split.by.colors = c("#4DBBD5FF", "#E64B35FF"),
+        show_grid = FALSE
+    ) +
+        theme(plot.background = element_rect(fill = "white"))
+    ggsave("results/109.paper/Fig3/tcell_full_dotplot.png", p, width = 8, height = 15)
+}
+paper_hormone_receptor_expression <- function(sc_final) {
+    # Create directory for results
+    dir.create("results/109.paper/HormoneReceptors", recursive = TRUE, showWarnings = FALSE)
+
+    # Define the receptor genes
+    receptors <- c("MC2R", "EPOR") # MC2R is the ACTH receptor, EPOR is the EPO receptor
+
+    # Create violin plots to visualize expression across cell types
+    p_violin <- VlnPlot2(sc_final,
+        features = receptors,
+        group.by = "cell_type_dtl",
+        pt.size = 0,
+        ncol = 1
+    ) +
+        theme(
+            plot.background = element_rect(fill = "white"),
+            axis.text.x = element_text(angle = 45, hjust = 1)
         )
-        p <- DotPlot2(sc_tcell,
-            features = markers,
-            group.by = "cell_type_dtl",
-            split.by = "group",
-            # split.by.method = "color",
-            # split.by.colors = c("#4DBBD5FF", "#E64B35FF"),
-            show_grid = FALSE
+
+    ggsave("results/109.paper/HormoneReceptors/hormone_receptors_violin.png", p_violin, width = 12, height = 10)
+
+    # Create dot plots for better visualization of expression pattern
+    p_dot <- DotPlot2(sc_final,
+        features = receptors,
+        group.by = "cell_type_dtl",
+        split.by = "group"
+    ) +
+        theme(
+            plot.background = element_rect(fill = "white"),
+            axis.text.x = element_text(angle = 45, hjust = 1)
+        )
+
+    ggsave("results/109.paper/HormoneReceptors/hormone_receptors_dotplot.png", p_dot, width = 10, height = 8)
+
+    # Calculate average expression by cell type
+    avg_exp <- AverageExpression(sc_final,
+        features = receptors,
+        assays = "RNA",
+        group.by = "cell_type_dtl"
+    )$RNA %>%
+        as.data.frame() %>%
+        rownames_to_column("receptor") %>%
+        pivot_longer(-receptor, names_to = "cell_type", values_to = "avg_expression")
+
+    # Sort and identify top expressing cell types
+    top_expressing <- avg_exp %>%
+        group_by(receptor) %>%
+        arrange(desc(avg_expression)) %>%
+        slice_head(n = 5) %>%
+        ungroup()
+
+    # Save the results
+    write.csv(avg_exp, "results/109.paper/HormoneReceptors/hormone_receptors_avg_expression.csv", row.names = FALSE)
+    write.csv(top_expressing, "results/109.paper/HormoneReceptors/hormone_receptors_top_expressing.csv", row.names = FALSE)
+
+    # Create bar plot of top expressing cell types
+    p_bar <- ggplot(top_expressing, aes(x = reorder(cell_type, avg_expression), y = avg_expression, fill = receptor)) +
+        geom_bar(stat = "identity", position = "dodge") +
+        facet_wrap(~receptor, scales = "free_y") +
+        labs(
+            title = "Top 5 Cell Types by Hormone Receptor Expression",
+            x = "Cell Type",
+            y = "Average Expression"
         ) +
-            theme(plot.background = element_rect(fill = "white"))
-        ggsave("results/109.paper/Fig3/tcell_full_dotplot.png", p, width = 8, height = 15)
+        theme_bw() +
+        theme(
+            axis.text.x = element_text(angle = 45, hjust = 1),
+            plot.background = element_rect(fill = "white")
+        )
+
+    ggsave("results/109.paper/HormoneReceptors/hormone_receptors_top_expressing_barplot.png", p_bar, width = 12, height = 8)
+
+    # Create a detailed feature plot to visualize expression on UMAP
+    p_feature <- DimPlot2(sc_final,
+        features = receptors,
+        split.by = "group",
+        reduction = "umap_integrated",
+        ncol = 1,
+        pt.size = 0.5
+    ) +
+        theme(plot.background = element_rect(fill = "white"))
+
+    ggsave("results/109.paper/HormoneReceptors/hormone_receptors_featureplot.png", p_feature, width = 10, height = 12)
+
+    # Calculate the percentage of cells expressing each receptor by cell type using magic imputation
+    percent_expr <- data.frame()
+    
+    # Create a temporary copy of the Seurat object for imputation
+    message("Performing MAGIC imputation for hormone receptors...")
+    sc_final_imp <- sc_final
+    
+    # Run MAGIC imputation for the receptor genes
+    # Using the Rmagic package which interfaces with the Python MAGIC algorithm
+    library(Rmagic)
+    
+    # Extract counts for imputation
+    expression_matrix <- GetAssayData(sc_final, assay = "RNA", slot = "data")
+    
+    # Perform MAGIC imputation on the expression matrix (focusing on receptors to save computation)
+    # This will help recover dropout events in sparse scRNA-seq data
+    genes_to_impute <- c(receptors, sample(rownames(expression_matrix), 100)) # Include some random genes to improve imputation
+    imputed_matrix <- magic(expression_matrix[genes_to_impute,], genes=receptors, 
+                           knn=5, t="auto", npca=20, seed=42)
+    
+    # For each receptor, analyze both original and imputed expression
+    for (receptor in receptors) {
+        # Extract expression data from the normalized RNA assay (original)
+        orig_expr <- GetAssayData(sc_final, assay = "RNA", slot = "data")[receptor, ]
+        
+        # Get imputed expression
+        imputed_expr <- imputed_matrix[receptor, ]
+        
+        # Combine with cell type information
+        expr_df <- data.frame(
+            cell = names(orig_expr),
+            orig_expression = orig_expr,
+            imputed_expression = imputed_expr[names(orig_expr)],
+            cell_type = sc_final$cell_type_dtl[names(orig_expr)],
+            group = sc_final$group[names(orig_expr)]
+        )
+        
+        # Calculate percentage using both original and imputed values
+        pct_result <- expr_df %>%
+            group_by(cell_type, group) %>%
+            summarize(
+                total_cells = n(),
+                # Original expression metrics
+                orig_expressing_cells = sum(orig_expression > 0),
+                orig_percent_expressing = round(100 * sum(orig_expression > 0) / n(), 2),
+                # Imputed expression metrics (with a slightly higher threshold to account for imputation bias)
+                imputed_expressing_cells = sum(imputed_expression > 0.1),
+                imputed_percent_expressing = round(100 * sum(imputed_expression > 0.1) / n(), 2),
+                # Average expression
+                avg_orig_expression = mean(orig_expression),
+                avg_imputed_expression = mean(imputed_expression)
+            ) %>%
+            ungroup() %>%
+            mutate(receptor = receptor)
+        
+        percent_expr <- bind_rows(percent_expr, pct_result) %>%
+            arrange(receptor, desc(imputed_percent_expressing))
+    }
+
+    # Save the percentage results
+    write.csv(percent_expr, "results/109.paper/HormoneReceptors/hormone_receptors_percent_expressing.csv", row.names = FALSE)
+
+    # Create heatmap showing percentage of cells expressing each receptor by cell type
+    p_heatmap <- ggplot(percent_expr, aes(x = cell_type, y = receptor, fill = percent_expressing)) +
+        geom_tile() +
+        facet_grid(. ~ group) +
+        scale_fill_gradient(low = "white", high = "#E41A1C", name = "% Expressing") +
+        labs(
+            title = "Percentage of Cells Expressing Hormone Receptors",
+            x = "Cell Type",
+            y = "Receptor"
+        ) +
+        theme_minimal() +
+        theme(
+            axis.text.x = element_text(angle = 45, hjust = 1),
+            plot.background = element_rect(fill = "white")
+        )
+
+    ggsave("results/109.paper/HormoneReceptors/hormone_receptors_percent_heatmap.png", p_heatmap, width = 14, height = 5)
+
+    # Create a bar plot showing percentage of cells expressing each receptor
+    p_bar <- ggplot(percent_expr, aes(x = reorder(cell_type, percent_expressing), y = percent_expressing, fill = group)) +
+        geom_bar(stat = "identity", position = "dodge") +
+        facet_wrap(~receptor, scales = "free_y", ncol = 1) +
+        labs(
+            title = "Percentage of Cells Expressing Hormone Receptors by Cell Type",
+            x = "Cell Type",
+            y = "% Cells Expressing"
+        ) +
+        theme_bw() +
+        theme(
+            axis.text.x = element_text(angle = 45, hjust = 1),
+            plot.background = element_rect(fill = "white")
+        )
+
+    ggsave("results/109.paper/HormoneReceptors/hormone_receptors_percent_barplot.png", p_bar, width = 12, height = 10)
+
+    # Get the top 5 cell types with highest expression percentage for each receptor and group
+    top5_percent <- percent_expr %>%
+        group_by(receptor, group) %>%
+        arrange(desc(percent_expressing)) %>%
+        slice_head(n = 5) %>%
+        ungroup()
+
+    # Save the top expressing results
+    write.csv(top5_percent, "results/109.paper/HormoneReceptors/hormone_receptors_top5_percent.csv", row.names = FALSE)
+    # Return path to the results directory
+    return("results/109.paper/HormoneReceptors")
 }

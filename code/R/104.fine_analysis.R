@@ -122,9 +122,47 @@ run_palantir <- function(sc_final) {
     qs::qsave(sc_final, "data/106.fine_analysis/sc_final_palantir.qs")
 }
 
-cell_communication <- function(sc_final) {
+cell_communication <- function(sc_final, sc_mye, sc_tcell) {
     sc_final <- sc_final %>%
         filter(group == "tumor")
+    library(liana)
+    library(magrittr)
+    library(nichenetr)
+
+    # Load myeloid and T cell data if needed
+    tar_load(sc_mye)
+    tar_load(sc_tcell)
+
+    # Extract cell_type_dtl from myeloid and T cell objects
+    mye_meta <- sc_mye@meta.data %>%
+        dplyr::select(cell_type_dtl) %>%
+        tibble::rownames_to_column("cell_id")
+
+    tcell_meta <- sc_tcell@meta.data %>%
+        dplyr::select(cell_type_dtl) %>%
+        tibble::rownames_to_column("cell_id")
+
+    # Get current metadata
+    current_meta <- sc_final@meta.data %>%
+        tibble::rownames_to_column("cell_id")
+
+    # Join the detailed cell types
+    updated_meta <- current_meta %>%
+        dplyr::left_join(mye_meta, by = "cell_id", suffix = c("", "_mye")) %>%
+        dplyr::left_join(tcell_meta, by = "cell_id", suffix = c("", "_tcell"))
+
+    # Update cell_type_dtl where needed
+    updated_meta <- updated_meta %>%
+        dplyr::mutate(cell_type_dtl = case_when(
+            !is.na(cell_type_dtl_tcell) ~ cell_type_dtl_tcell,
+            !is.na(cell_type_dtl_mye) ~ cell_type_dtl_mye,
+            TRUE ~ cell_type_dtl
+        )) %>%
+        dplyr::select(-cell_type_dtl_mye, -cell_type_dtl_tcell) %>%
+        tibble::column_to_rownames("cell_id")
+
+    # Update sc_final metadata
+    sc_final@meta.data <- updated_meta
     liana_test <- liana_wrap(sc_final, idents_col = "cell_type_dtl")
     liana_test <- liana_test %>%
         liana_aggregate()
