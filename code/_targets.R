@@ -78,7 +78,7 @@ list(
     tar_target(myeloid_plot, plot_myeloid(sc_mye)),
     tar_target(sc_tcell_clust_list, sub_cluster_tcell(sc_final)),
     tar_target(sc_tcell_clust_impro_list, Tcell_annotation_analysis(sc_tcell_clust_list, sc_final)),
-    tar_target(sc_tcell, Tcell_annotate(sc_tcell_clust_list)),
+    tar_target(sc_tcell, Tcell_annotate(sc_tcell_clust_impro_list, sc_final)),
     tar_target(t_composition_test, test_tcell_composition(sc_tcell)),
     tar_target(tcell_distribution_path, plot_tcell_distribution(sc_tcell, t_composition_test), format = "file"),
     tar_target(tcell_GSEA_path, run_tcell_GSEA(sc_tcell), format = "file"),

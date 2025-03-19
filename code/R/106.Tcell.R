@@ -12,11 +12,11 @@ sub_cluster_tcell <- function(sc_final) {
 
     # Process normal group
     sc_int_normal <- sc_int_normal %>%
-        FindNeighbors(dims = 1:30, reduction = "harmony") %>%
+        FindNeighbors(dims = 1:30, reduction = "scvi") %>%
         FindClusters(resolution = 0.9, algorithm = 4, method = "igraph", cluster.name = "immune_subcluster") %>%
         RunUMAP(
             dims = 1:30,
-            reduction = "harmony",
+            reduction = "scvi",
             reduction.name = "umap_integrated",
             min.dist = 0.05,
             n.neighbors = 50,
@@ -25,11 +25,11 @@ sub_cluster_tcell <- function(sc_final) {
 
     # Process tumor group
     sc_int_tumor <- sc_int_tumor %>%
-        FindNeighbors(dims = 1:30, reduction = "harmony") %>%
+        FindNeighbors(dims = 1:30, reduction = "scvi") %>%
         FindClusters(resolution = 0.9, algorithm = 4, method = "igraph", cluster.name = "immune_subcluster") %>%
         RunUMAP(
             dims = 1:30,
-            reduction = "harmony",
+            reduction = "scvi",
             reduction.name = "umap_integrated",
             min.dist = 0.05,
             n.neighbors = 50,
@@ -56,29 +56,6 @@ sub_cluster_tcell <- function(sc_final) {
         theme(plot.background = element_rect(fill = "white"))
     ggsave("results/108.Tcell/sub_cluster_immune_tumor.png", p2, width = 7, height = 7)
 
-    # Also process the combined dataset for reference
-    sc_int <- sc_int %>%
-        FindNeighbors(dims = 1:30, reduction = "harmony") %>%
-        FindClusters(resolution = 0.9, algorithm = 4, method = "igraph", cluster.name = "immune_subcluster") %>%
-        RunUMAP(
-            dims = 1:30,
-            reduction = "harmony",
-            reduction.name = "umap_integrated",
-            min.dist = 0.05,
-            n.neighbors = 50,
-            spread = 0.5
-        )
-
-    # Visualize combined clustering
-    p3 <- DimPlot2(sc_int,
-        reduction = "umap_integrated",
-        group.by = "immune_subcluster",
-        label = TRUE
-    ) +
-        ggtitle("Combined") +
-        theme(plot.background = element_rect(fill = "white"))
-    ggsave("results/108.Tcell/sub_cluster_immune_combined.png", p3, width = 7, height = 7)
-
     # Return all three objects as a list
     list(
         normal = sc_int_normal,
@@ -86,53 +63,101 @@ sub_cluster_tcell <- function(sc_final) {
         combined = sc_int
     )
 }
+TCellAnnotation_CellTypist <- function(sc_tcell_clust_list) {
+    # Create directory for results
+    dir.create("results/108.Tcell/celltypist", showWarnings = FALSE, recursive = TRUE)
+
+    # Extract normal and tumor objects
+    sc_tcell_clust_normal <- sc_tcell_clust_list$normal
+    sc_tcell_clust_tumor <- sc_tcell_clust_list$tumor
+
+    # Define function to run celltypist
+    run_celltypist <- function(seurat_obj, output_prefix) {
+        # Convert to AnnData
+        adata_path <- paste0("results/108.Tcell/celltypist/", output_prefix, "_data.h5ad")
+        as.anndata(seurat_obj,
+            file_path = dirname(adata_path),
+            file_name = basename(adata_path),
+            main_layer = "counts",
+            other_layers = c("data")
+        )
+
+        # Run celltypist using reticulate
+        reticulate::use_condaenv("r-reticulate", required = TRUE)
+        celltypist <- reticulate::import("celltypist")
+
+        # Load the model
+        model <- celltypist$models$Model$load(model = "Immune_All_Low.pkl")
+
+        # Run prediction
+        adata <- reticulate::import("anndata")$read_h5ad(adata_path)
+        predictions <- celltypist$annotate(adata, model = model, majority_voting = TRUE)
+
+        # Extract predictions
+        pred_df <- reticulate::py_to_r(predictions$predicted_labels)
+        pred_df <- as.data.frame(pred_df)
+
+        # Save predictions
+        write_csv(pred_df, paste0("results/108.Tcell/celltypist/", output_prefix, "_predictions.csv"))
+
+        # Add annotations to Seurat object
+        seurat_obj$celltypist_celltype <- pred_df$majority_voting[match(colnames(seurat_obj), rownames(pred_df))]
+
+        # Create UMAP plot with celltypist annotations
+        p <- DimPlot2(seurat_obj,
+            reduction = "umap_integrated",
+            group.by = "celltypist_celltype",
+            label = TRUE,
+            label.size = 3
+        ) +
+            ggtitle(paste0(output_prefix, " - CellTypist Annotations")) +
+            theme(plot.background = element_rect(fill = "white"))
+
+        ggsave(paste0("results/108.Tcell/celltypist/", output_prefix, "_umap.png"), p, width = 12, height = 10)
+
+        return(seurat_obj)
+    }
+
+    # Run celltypist on normal and tumor data
+    sc_tcell_clust_normal <- run_celltypist(sc_tcell_clust_normal, "normal")
+    sc_tcell_clust_tumor <- run_celltypist(sc_tcell_clust_tumor, "tumor")
+
+    # Compare celltypist annotations with immune_subcluster
+    compare_annotations <- function(seurat_obj, output_prefix) {
+        comparison <- table(
+            CellTypist = seurat_obj$celltypist_celltype,
+            Cluster = seurat_obj$immune_subcluster
+        )
+
+        # Save comparison table
+        write.csv(
+            comparison,
+            paste0("results/108.Tcell/celltypist/", output_prefix, "_comparison.csv")
+        )
+
+        # Create heatmap
+        pheatmap::pheatmap(
+            log1p(comparison),
+            display_numbers = TRUE,
+            filename = paste0("results/108.Tcell/celltypist/", output_prefix, "_comparison_heatmap.png"),
+            width = 12,
+            height = 10
+        )
+    }
+
+    compare_annotations(sc_tcell_clust_normal, "normal")
+    compare_annotations(sc_tcell_clust_tumor, "tumor")
+
+    # Return updated list
+    list(
+        normal = sc_tcell_clust_normal,
+        tumor = sc_tcell_clust_tumor,
+        combined = sc_tcell_clust_list$combined
+    )
+}
 Tcell_annotation_analysis <- function(sc_tcell_clust_list, sc_final) {
     sc_tcell_clust_normal <- sc_tcell_clust_list$normal
     sc_tcell_clust_tumor <- sc_tcell_clust_list$tumor
-    # # Extract cluster 5 cells
-    # cluster5_cells <- subset(sc_tcell_clust, immune_subcluster == "6")
-
-    # # Re-cluster cluster 5
-    # cluster5_cells <- cluster5_cells %>%
-    #     FindNeighbors(dims = 1:30, reduction = "harmony") %>%
-    #     FindClusters(resolution = 0.9, algorithm = 4, method = "igraph", cluster.name = "subcluster")
-
-    # # Extract cluster 9 cells
-    # cluster9_cells <- subset(sc_tcell_clust, immune_subcluster == "9")
-
-    # # Re-cluster cluster 9
-    # cluster9_cells <- cluster9_cells %>%
-    #     FindNeighbors(dims = 1:30, reduction = "harmony") %>%
-    #     FindClusters(resolution = 0.5, algorithm = 4, method = "igraph", cluster.name = "subcluster")
-
-    # # Add sub-cluster labels back to main object
-    # sc_tcell_clust$immune_subcluster <- as.character(sc_tcell_clust$immune_subcluster)
-
-    # # Update cluster 5 labels
-    # new_labels_5 <- paste0("6-", cluster5_cells$subcluster)
-    # sc_tcell_clust$immune_subcluster[colnames(cluster5_cells)] <- new_labels_5
-
-    # # # Update cluster 9 labels
-    # # new_labels_9 <- paste0("9-", cluster9_cells$subcluster)
-    # # sc_tcell_clust$immune_subcluster[colnames(cluster9_cells)] <- new_labels_9
-
-    # sc_tcell_clust$immune_subcluster <- as.factor(sc_tcell_clust$immune_subcluster)
-
-    # Merge clusters 2 and 3
-    # sc_tcell_clust$immune_subcluster <- as.character(sc_tcell_clust$immune_subcluster)
-    # sc_tcell_clust$immune_subcluster[sc_tcell_clust$immune_subcluster == "2"] <- "1"
-    # sc_tcell_clust$immune_subcluster <- as.factor(sc_tcell_clust$immune_subcluster)
-    # # Create a mapping from old to new cluster numbers
-    # current_levels <- sort(unique(as.character(sc_tcell_clust$immune_subcluster)))
-    # new_levels <- as.character(seq_along(current_levels))
-    # names(new_levels) <- current_levels
-
-    # # Apply the mapping to reorder clusters
-    # sc_tcell_clust$immune_subcluster <- plyr::mapvalues(sc_tcell_clust$immune_subcluster,
-    #     from = names(new_levels),
-    #     to = new_levels
-    # )
-    # sc_tcell_clust$immune_subcluster <- factor(sc_tcell_clust$immune_subcluster, levels = new_levels)
     markers <- list(
         # Core T Cell Markers
         "T_Cells" = c("CD3D", "CD3E", "CD3G"),
@@ -140,27 +165,39 @@ Tcell_annotation_analysis <- function(sc_tcell_clust_list, sc_final) {
         "CD8_T_Cells" = c("CD8A", "CD8B"),
 
         # Specialized T Cell Subsets
-        "Tregs" = c("FOXP3", "IL2RA", "CTLA4", "TNFRSF18"),
+        "Tregs" = c("FOXP3", "IL2RA", "CTLA4", "TNFRSF18", "IKZF2", "TNFRSF9", "TNFRSF4", "IL10", "ENTPD1"),
         "gdT_Cells" = c("TRDC", "TRGC1", "TRGC2", "TRDV1", "TRDV2"),
         "NK_Cells" = c("NKG7", "GNLY", "KLRD1", "NCAM1", "FCGR3A", "NCR1", "NCR3", "KIR2DL1", "KIR2DL3", "KIR3DL1"),
+        "MAIT_NKT" = c("ZBTB16", "SLC4A10", "KLRB1", "TRAV1-2", "DPP4"),
 
         # Naive and Memory Markers
-        "Naive_T" = c("CCR7", "SELL", "TCF7", "LEF1", "IL7R", "SKAP1", "THEMIS", "PTPRC"),
-        "Memory_T" = c("CD44", "IL7R", "CD45RO", "PRKCQ", "STAT4"),
+        "Naive_T" = c("CCR7", "SELL", "TCF7", "LEF1", "IL7R", "SKAP1", "THEMIS", "PTPRC", "S1PR1", "KLF2"),
+        "Memory_T" = c("CD44", "IL7R", "CD45RO", "PRKCQ", "STAT4", "CD27", "CD28"),
 
         # Tissue-Resident Memory
-        "Trm" = c("ITGAE", "CD69", "CXCR6"),
+        "Trm" = c("ITGAE", "CD69", "CXCR6", "ITGA1"),
 
-        # Effector Functions
-        "Effector" = c("GZMA", "GZMB", "GZMH", "GZMK", "PRF1", "IFNG", "TNF", "FASLG"),
+        # Migration and Tissue Homing
+        "Homing" = c("CCR9", "CXCR4", "CCR2", "CCR10", "SELL", "ITGB7"),
+
+        # Effector Functions and Cytotoxicity
+        "Effector" = c("GZMA", "GZMB", "GZMH", "GZMK", "PRF1", "IFNG", "TNF", "FASLG", "LAMP1", "KLRG1", "CX3CR1", "IL32", "TNFSF10", "EOMES"),
 
         # Exhaustion Markers
-        "Exhausted" = c("PDCD1", "CTLA4", "LAG3", "TIGIT", "HAVCR2", "ENTPD1"),
+        "Exhausted" = c("PDCD1", "CTLA4", "LAG3", "TIGIT", "HAVCR2", "ENTPD1", "TOX", "PRDM1", "BTLA"),
+
+        # Activation Markers
+        "Activation" = c("ICOS", "HLA-DRA", "HLA-DRB1", "CD69", "MKI67", "PCNA", "TOP2A", "CDK1"),
 
         # T Helper Subtypes and Key Transcription Factors
-        "Th1" = c("IFNG", "CXCR3", "TBX21"), # TBX21 (T-bet)
-        "Th2" = c("IL4", "IL5", "IL13", "CCR4", "GATA3"),
-        "Th17" = c("IL17A", "CTLA8", "IL17", "IL17F", "IL22", "CCR6", "RORC")
+        "Th1" = c("IFNG", "CXCR3", "TBX21", "CCR5", "GZMK", "STAT1"),
+        "Th2" = c("IL4", "IL5", "IL13", "CCR4", "GATA3", "CCR3", "STAT6"),
+        "Th17" = c("IL17A", "IL17F", "IL22", "CCR6", "RORC", "IL23R", "IL1R1", "CCL20", "BATF"),
+        "Tfh" = c("BCL6", "CXCR5", "ICOS", "MAF"),
+        "Th22" = c("IL22", "AHR"),
+
+        # T Cell Fate Decision Markers
+        "Fate_Regulators" = c("ID2", "ID3", "TOX", "BATF", "MAF")
     )
 
 
@@ -179,6 +216,12 @@ Tcell_annotation_analysis <- function(sc_tcell_clust_list, sc_final) {
     p2_normal <- Heatmap(toplot_normal, lab_fill = "zscore", facet_row = gene_groups_normal) +
         theme(plot.background = element_rect(fill = "white"))
     ggsave("results/108.Tcell/sub_cluster_immune_heatmap_normal.png", p2_normal, width = 8, height = 15)
+    p2_normal_dot <- DotPlot2(sc_tcell_clust_normal,
+        features = markers,
+        group.by = "immune_subcluster"
+    ) +
+        theme(plot.background = element_rect(fill = "white"))
+    ggsave("results/108.Tcell/sub_cluster_immune_dotplot_normal.png", p2_normal_dot, width = 8, height = 15)
     write_csv(
         toplot_normal %>%
             as.data.frame() %>%
@@ -201,6 +244,12 @@ Tcell_annotation_analysis <- function(sc_tcell_clust_list, sc_final) {
     p2_tumor <- Heatmap(toplot_tumor, lab_fill = "zscore", facet_row = gene_groups_tumor) +
         theme(plot.background = element_rect(fill = "white"))
     ggsave("results/108.Tcell/sub_cluster_immune_heatmap_tumor.png", p2_tumor, width = 8, height = 15)
+    p2_tumor_dot <- DotPlot2(sc_tcell_clust_tumor,
+        features = markers,
+        group.by = "immune_subcluster"
+    ) +
+        theme(plot.background = element_rect(fill = "white"))
+    ggsave("results/108.Tcell/sub_cluster_immune_dotplot_tumor.png", p2_tumor_dot, width = 8, height = 15)
     write_csv(
         toplot_tumor %>%
             as.data.frame() %>%
@@ -209,64 +258,408 @@ Tcell_annotation_analysis <- function(sc_tcell_clust_list, sc_final) {
         "results/108.Tcell/immune_subcluster_expression_tumor.csv"
     )
 
+    CD4_clusters_tumor <- c(1, 2, 4)
+    CD8_clusters_tumor <- c(3, 5, 6)
+    DN_clusters_tumor <- c(7)
+    sc_tcell_CD4_tumor <- sc_tcell_clust_tumor %>%
+        filter(immune_subcluster %in% CD4_clusters_tumor) %>%
+        FindNeighbors(dims = 1:30, reduction = "scvi") %>%
+        FindClusters(resolution = 1.5, algorithm = 4, method = "igraph", cluster.name = "immune_subcluster_CD4")
+    sc_tcell_CD8_tumor <- sc_tcell_clust_tumor %>%
+        filter(immune_subcluster %in% CD8_clusters_tumor) %>%
+        FindNeighbors(dims = 1:30, reduction = "scvi") %>%
+        FindClusters(resolution = 1.8, algorithm = 4, method = "igraph", cluster.name = "immune_subcluster_CD8")
+    sc_tcell_DN_tumor <- sc_tcell_clust_tumor %>%
+        filter(immune_subcluster %in% DN_clusters_tumor) %>%
+        FindNeighbors(dims = 1:30, reduction = "scvi") %>%
+        FindClusters(resolution = 1, algorithm = 4, method = "igraph", cluster.name = "immune_subcluster_DN")
+    CD4_clusters_normal <- c(1)
+    CD8_clusters_normal <- c(2, 3)
+    DN_clusters_normal <- c(4, 5)
+    sc_tcell_CD4_normal <- sc_tcell_clust_normal %>%
+        filter(immune_subcluster %in% CD4_clusters_normal) %>%
+        FindNeighbors(dims = 1:30, reduction = "scvi") %>%
+        FindClusters(resolution = 0.9, algorithm = 4, method = "igraph", cluster.name = "immune_subcluster_CD4")
+    sc_tcell_CD8_normal <- sc_tcell_clust_normal %>%
+        filter(immune_subcluster %in% CD8_clusters_normal) %>%
+        FindNeighbors(dims = 1:30, reduction = "scvi") %>%
+        FindClusters(resolution = 1, algorithm = 4, method = "igraph", cluster.name = "immune_subcluster_CD8")
+    sc_tcell_DN_normal <- sc_tcell_clust_normal %>%
+        filter(immune_subcluster %in% DN_clusters_normal) %>%
+        FindNeighbors(dims = 1:30, reduction = "scvi") %>%
+        FindClusters(resolution = 1, algorithm = 4, method = "igraph", cluster.name = "immune_subcluster_DN")
+
+    # remove the first 3 vectors in markers
+    cd4_markers <- list(
+        # T cell states
+        "activated" = c("TNFRSF18", "TNFRSF4"),
+        "Tc" = c("GZMA", "GZMK"),
+        "proliferation" = c("MKI67"),
+        "Tcm" = c("S100A10", "LTB"),
+        "Tem" = c("CXCR4", "KLRB1"),
+        "Temra" = c("NKG7", "GNLY"),
+        "Tex" = c("SRGN", "DUSP4"),
+        "Tfh" = c("PDCD1", "ICOS"),
+        "Th1" = c("CCL5", "CXCR3"),
+        "Th17" = c("IL7R", "CCR6"),
+        "Th22" = c("IL22", "AHR"),
+        "Ttsg" = c("ISG15", "STAT1"),
+        "Tn" = c("SELL", "TCF7", "CCR7"),
+        "Treg" = c("FOXP3", "IL2RA"),
+        "Trm" = c("ITGA4", "ITGB2"),
+        "Tstr" = c("HSP90AA1", "HSPA1B")
+    )
+
+
+    toplot_CD4_tumor <- CalcStats(sc_tcell_CD4_tumor,
+        features = cd4_markers %>% unlist(),
+        method = "zscore", order = "value",
+        group.by = "immune_subcluster_CD4"
+    )
+    gene_groups_CD4_tumor <- rep(names(cd4_markers), lengths(cd4_markers)) %>%
+        setNames(cd4_markers %>% unlist()) %>%
+        .[rownames(toplot_CD4_tumor)]
+    p2_CD4_tumor <- Heatmap(toplot_CD4_tumor, lab_fill = "zscore", facet_row = gene_groups_CD4_tumor) +
+        theme(plot.background = element_rect(fill = "white"))
+    ggsave("results/108.Tcell/sub_cluster_immune_heatmap_CD4_tumor.png", p2_CD4_tumor, width = 8, height = 15)
+    p2_CD4_tumor_dot <- DotPlot2(sc_tcell_CD4_tumor,
+        features = cd4_markers,
+        group.by = "immune_subcluster_CD4"
+    ) +
+        theme(plot.background = element_rect(fill = "white"))
+    ggsave("results/108.Tcell/sub_cluster_immune_dotplot_CD4_tumor.png", p2_CD4_tumor_dot, width = 8, height = 15)
+    write_csv(
+        toplot_CD4_tumor %>%
+            as.data.frame() %>%
+            rownames_to_column("gene") %>%
+            mutate(across(where(is.numeric), round, 4)),
+        "results/108.Tcell/immune_subcluster_expression_CD4_tumor.csv"
+    )
+
+    toplot_CD4_normal <- CalcStats(sc_tcell_CD4_normal,
+        features = cd4_markers %>% unlist(),
+        method = "zscore", order = "value",
+        group.by = "immune_subcluster_CD4"
+    )
+    gene_groups_CD4_normal <- rep(names(cd4_markers), lengths(cd4_markers)) %>%
+        setNames(cd4_markers %>% unlist()) %>%
+        .[rownames(toplot_CD4_normal)]
+    p2_CD4_normal <- Heatmap(toplot_CD4_normal, lab_fill = "zscore", facet_row = gene_groups_CD4_normal) +
+        theme(plot.background = element_rect(fill = "white"))
+    ggsave("results/108.Tcell/sub_cluster_immune_heatmap_CD4_normal.png", p2_CD4_normal, width = 8, height = 15)
+    p2_CD4_normal_dot <- DotPlot2(sc_tcell_CD4_normal,
+        features = cd4_markers,
+        group.by = "immune_subcluster_CD4"
+    ) +
+        theme(plot.background = element_rect(fill = "white"))
+    ggsave("results/108.Tcell/sub_cluster_immune_dotplot_CD4_normal.png", p2_CD4_normal_dot, width = 8, height = 15)
+    write_csv(
+        toplot_CD4_normal %>%
+            as.data.frame() %>%
+            rownames_to_column("gene") %>%
+            mutate(across(where(is.numeric), round, 4)),
+        "results/108.Tcell/immune_subcluster_expression_CD4_normal.csv"
+    )
+
+    cd8_markers <- list(
+        "NKT-like" = c("NKG7", "KLRD1", "FCGR3A"),
+        "proliferation" = c("MKI67", "HMGB2", "HMGB1"),
+        "quiescence" = c("RUNX1"),
+        "senescence" = c("ATM", "TSC2"),
+        "Tc" = c("CX3CR1", "GZMH"),
+        "Tcm" = c("CREM", "IL7R", "CCR7"),
+        "Tem" = c("CST7", "EOMES", "GZMK", "GZMA"),
+        "Temra" = c("GNLY", "FGFBP2"),
+        "Tex" = c("LAG3", "TIGIT", "HAVCR2", "PDCD1"),
+        "Tn" = c("LEF1", "SELL", "TCF7", "CCR7"),
+        # "Tn_quiescence" = c("BTG1", "KLF2", "BTG2"),
+        # "Tn_IFN_response" = c("STAT1", "IFITM1", "IRF1", "IFITM3"),
+        "Trm" = c("ITGA1", "ITGB1"),
+        "Tstr" = c("HSPA5", "HSP90AA1", "HSP90AB1")
+    )
+
+    toplot_CD8_tumor <- CalcStats(sc_tcell_CD8_tumor,
+        features = cd8_markers %>% unlist(),
+        method = "zscore", order = "value",
+        group.by = "immune_subcluster_CD8"
+    )
+    gene_groups_CD8_tumor <- rep(names(cd8_markers), lengths(cd8_markers)) %>%
+        setNames(cd8_markers %>% unlist()) %>%
+        .[rownames(toplot_CD8_tumor)]
+    p2_CD8_tumor <- Heatmap(toplot_CD8_tumor, lab_fill = "zscore", facet_row = gene_groups_CD8_tumor) +
+        theme(plot.background = element_rect(fill = "white"))
+    ggsave("results/108.Tcell/sub_cluster_immune_heatmap_CD8_tumor.png", p2_CD8_tumor, width = 8, height = 15)
+    p2_CD8_tumor_dot <- DotPlot2(sc_tcell_CD8_tumor,
+        features = cd8_markers,
+        group.by = "immune_subcluster_CD8"
+    ) +
+        theme(plot.background = element_rect(fill = "white"))
+    ggsave("results/108.Tcell/sub_cluster_immune_dotplot_CD8_tumor.png", p2_CD8_tumor_dot, width = 8, height = 15)
+    write_csv(
+        toplot_CD8_tumor %>%
+            as.data.frame() %>%
+            rownames_to_column("gene") %>%
+            mutate(across(where(is.numeric), round, 4)),
+        "results/108.Tcell/immune_subcluster_expression_CD8_tumor.csv"
+    )
+    toplot_CD8_normal <- CalcStats(sc_tcell_CD8_normal,
+        features = cd8_markers %>% unlist(),
+        method = "zscore", order = "value",
+        group.by = "immune_subcluster_CD8"
+    )
+    gene_groups_CD8_normal <- rep(names(cd8_markers), lengths(cd8_markers)) %>%
+        setNames(cd8_markers %>% unlist()) %>%
+        .[rownames(toplot_CD8_normal)]
+    p2_CD8_normal <- Heatmap(toplot_CD8_normal, lab_fill = "zscore", facet_row = gene_groups_CD8_normal) +
+        theme(plot.background = element_rect(fill = "white"))
+    ggsave("results/108.Tcell/sub_cluster_immune_heatmap_CD8_normal.png", p2_CD8_normal, width = 8, height = 15)
+    p2_CD8_normal_dot <- DotPlot2(sc_tcell_CD8_normal,
+        features = cd8_markers,
+        group.by = "immune_subcluster_CD8"
+    ) +
+        theme(plot.background = element_rect(fill = "white"))
+    ggsave("results/108.Tcell/sub_cluster_immune_dotplot_CD8_normal.png", p2_CD8_normal_dot, width = 8, height = 15)
+    write_csv(
+        toplot_CD8_normal %>%
+            as.data.frame() %>%
+            rownames_to_column("gene") %>%
+            mutate(across(where(is.numeric), round, 4)),
+        "results/108.Tcell/immune_subcluster_expression_CD8_normal.csv"
+    )
+
+    dn_markers <- list(
+        # TCR Types
+        "alphabeta_TCR" = c("TRAV", "TRBV", "TRAJ", "TRBJ"),
+        "gammadelta_TCR" = c("TRGC1", "TRGC2", "TRDC", "TRDV1", "TRDV2", "TRGV9", "TRDV3"),
+
+        # DN T Cell Developmental Stages
+        "DN1" = c("CD44", "KIT", "IL7R", "FLT3", "CD24", "BCL11A", "GATA3"),
+        "DN2" = c("CD44", "KIT", "IL7R", "CD24", "BCL11B", "GATA3", "NOTCH1", "HES1"),
+        "DN3" = c("CD24", "PTCRA", "RAG1", "RAG2", "NOTCH1", "HES1", "DTX1", "BCL11B"),
+        "DN4" = c("CD24", "ITM2A", "LEF1", "ID3", "THEMIS"),
+
+        # Unconventional T Cell Subtypes
+        "NKT_Cells" = c("ZBTB16", "CD160", "KLRB1", "CD244", "KLRC1", "GZMA", "VA24-JA18", "Vβ11"),
+        "MAIT_Cells" = c("SLC4A10", "TRAV1-2", "RORC", "ZBTB16", "KLRB1", "DPP4", "IL18R1", "CXCR6", "CCR6"),
+
+        # iNKT Developmental Stages
+        "iNKT_Stage0" = c("LEF1", "KLF2", "GATA3", "IL4", "IL7R", "CCR7"),
+        "iNKT_Stage1" = c("GATA3", "IL4", "IFNG", "ZBTB16"),
+        "iNKT_Stage2" = c("TBXT", "IFNG", "IL4", "RORC"),
+
+        # Functional DN Subsets
+        "DN_Regulatory" = c("FOXP3", "IKZF2", "EGR2", "IL10", "CTLA4", "TNFRSF18", "ENTPD1", "TGFB1", "LAG3", "NRP1"),
+        "DN_Cytotoxic" = c("GZMB", "PRF1", "FASLG", "TNFSF10", "IFNG", "LAMP1", "NKG7"),
+        "DN_Helper" = c("IL2", "IL4", "IL17A", "IL21", "CD40LG"),
+
+        # Tissue-Specific DN T Cells
+        "Intestinal_DN" = c("ITGAE", "IL22", "IL17A", "RORC", "AHR", "CCR9", "ITGA4", "ITGB7"),
+        "Skin_DN" = c("CLA", "CCR4", "CCR8", "CCR10", "IL22", "IL17A"),
+        "Liver_DN" = c("CXCR3", "CXCR6", "CCR5", "S1PR1", "KLRB1", "CD69"),
+
+        # Pathological DN T Cells
+        "Autoimmune_DN" = c("IL17A", "IL17F", "IL23R", "CCR6", "RORC", "STAT3", "IL1R1"),
+        "Senescent_DN" = c("CDKN1A", "CDKN2A", "GLB1", "TP53BP1", "MAPK14", "CD57"),
+
+        # DN T Cell Activation/Differentiation
+        "Naive_DN" = c("SELL", "CCR7", "CD27", "IL7R", "BACH2", "SATB1", "LEF1"),
+        "Memory_DN" = c("S100A4", "ANXA1", "CD101", "IL7R", "CD44"),
+        "Activated_DN" = c("CD69", "HLA-DRA", "HLA-DRB1", "MKI67", "TNFRSF9", "IL2RA"),
+
+        # DN-Specific Transcription Factors
+        "DN_TF" = c("ID3", "SOX4", "SOX13", "ETV5", "NFIL3", "PLZF", "RUNX1", "RUNX3", "TOX2", "MYB")
+    )
+
+    toplot_DN_tumor <- CalcStats(sc_tcell_DN_tumor,
+        features = dn_markers %>% unlist(),
+        method = "zscore", order = "value",
+        group.by = "immune_subcluster_DN"
+    )
+    gene_groups_DN_tumor <- rep(names(dn_markers), lengths(dn_markers)) %>%
+        setNames(dn_markers %>% unlist()) %>%
+        .[rownames(toplot_DN_tumor)]
+    p2_DN_tumor <- Heatmap(toplot_DN_tumor, lab_fill = "zscore", facet_row = gene_groups_DN_tumor) +
+        theme(plot.background = element_rect(fill = "white"))
+    ggsave("results/108.Tcell/sub_cluster_immune_heatmap_DN_tumor.png", p2_DN_tumor, width = 8, height = 15)
+    p2_DN_tumor_dot <- DotPlot2(sc_tcell_DN_tumor,
+        features = dn_markers,
+        group.by = "immune_subcluster_DN"
+    ) +
+        theme(plot.background = element_rect(fill = "white"))
+    ggsave("results/108.Tcell/sub_cluster_immune_dotplot_DN_tumor.png", p2_DN_tumor_dot, width = 8, height = 15)
+    write_csv(
+        toplot_DN_tumor %>%
+            as.data.frame() %>%
+            rownames_to_column("gene") %>%
+            mutate(across(where(is.numeric), round, 4)),
+        "results/108.Tcell/immune_subcluster_expression_DN_tumor.csv"
+    )
+    toplot_DN_normal <- CalcStats(sc_tcell_DN_normal,
+        features = dn_markers %>% unlist(),
+        method = "zscore", order = "value",
+        group.by = "immune_subcluster_DN"
+    )
+    gene_groups_DN_normal <- rep(names(dn_markers), lengths(dn_markers)) %>%
+        setNames(dn_markers %>% unlist()) %>%
+        .[rownames(toplot_DN_normal)]
+    p2_DN_normal <- Heatmap(toplot_DN_normal, lab_fill = "zscore", facet_row = gene_groups_DN_normal) +
+        theme(plot.background = element_rect(fill = "white"))
+    ggsave("results/108.Tcell/sub_cluster_immune_heatmap_DN_normal.png", p2_DN_normal, width = 8, height = 15)
+    p2_DN_normal_dot <- DotPlot2(sc_tcell_DN_normal,
+        features = dn_markers,
+        group.by = "immune_subcluster_DN"
+    ) +
+        theme(plot.background = element_rect(fill = "white"))
+    ggsave("results/108.Tcell/sub_cluster_immune_dotplot_DN_normal.png", p2_DN_normal_dot, width = 8, height = 15)
+    write_csv(
+        toplot_DN_normal %>%
+            as.data.frame() %>%
+            rownames_to_column("gene") %>%
+            mutate(across(where(is.numeric), round, 4)),
+        "results/108.Tcell/immune_subcluster_expression_DN_normal.csv"
+    )
+
+    # Add immune_subcluster_CD4 back to the tumor Seurat object
+    sc_tcell_clust_tumor$immune_subcluster_CD4 <- NA
+    sc_tcell_clust_tumor$immune_subcluster_CD4[colnames(sc_tcell_CD4_tumor)] <- sc_tcell_CD4_tumor$immune_subcluster_CD4
+
+    # Add immune_subcluster_CD8 back to the tumor Seurat object
+    sc_tcell_clust_tumor$immune_subcluster_CD8 <- NA
+    sc_tcell_clust_tumor$immune_subcluster_CD8[colnames(sc_tcell_CD8_tumor)] <- sc_tcell_CD8_tumor$immune_subcluster_CD8
+
+    # Add immune_subcluster_DN back to the tumor Seurat object
+    sc_tcell_clust_tumor$immune_subcluster_DN <- NA
+    sc_tcell_clust_tumor$immune_subcluster_DN[colnames(sc_tcell_DN_tumor)] <- sc_tcell_DN_tumor$immune_subcluster_DN
+
+    # Add immune_subcluster_CD4 back to the normal Seurat object
+    sc_tcell_clust_normal$immune_subcluster_CD4 <- NA
+    sc_tcell_clust_normal$immune_subcluster_CD4[colnames(sc_tcell_CD4_normal)] <- sc_tcell_CD4_normal$immune_subcluster_CD4
+
+    # Add immune_subcluster_CD8 back to the normal Seurat object
+    sc_tcell_clust_normal$immune_subcluster_CD8 <- NA
+    sc_tcell_clust_normal$immune_subcluster_CD8[colnames(sc_tcell_CD8_normal)] <- sc_tcell_CD8_normal$immune_subcluster_CD8
+
+    # Add immune_subcluster_DN back to the normal Seurat object
+    sc_tcell_clust_normal$immune_subcluster_DN <- NA
+    sc_tcell_clust_normal$immune_subcluster_DN[colnames(sc_tcell_DN_normal)] <- sc_tcell_DN_normal$immune_subcluster_DN
+
     list(
-        "sc_tcell_clust_normal" = sc_tcell_clust_normal,
-        "sc_tcell_clust_tumor" = sc_tcell_clust_tumor
+        "normal" = sc_tcell_clust_normal,
+        "tumor" = sc_tcell_clust_tumor
     )
 }
 
-Tcell_annotate <- function(sc_tcell_clust_list) {
+
+Tcell_annotate <- function(sc_tcell_clust_list, sc_final) {
     sc_tcell_clust_normal <- sc_tcell_clust_list$normal
     sc_tcell_clust_tumor <- sc_tcell_clust_list$tumor
-    sc_tcell_clust <- sc_tcell_clust_list$combined
 
     # Define cluster maps for tumor and normal groups
-    cluster_map_tumor <- c(
-        "1" = "CD4_Treg/Th17",
-        "2" = "CD4_TN/Th17",
-        "3" = "Resting_T",
-        "4" = "CD8_FOXP3_Treg",
-        "5" = "CD4_TN",
-        "6" = "CTLA4_T",
-        "7" = "CD8_Cyto_gdT",
-        "8" = "CD8_Cyto_Ext_gdT"
+    # Define cluster maps for tumor and normal groups
+    cluster_map_tumor_CD4 <- c(
+        "1" = "CD4_Th22",
+        "2" = "CD4_Tn",
+        "3" = "CD4_Th1/Th17",
+        "4" = "CD4_Tn",
+        "5" = "CD4_Tn",
+        "6" = "CD4_Th1/Th17",
+        "7" = "CD4_Th1/Th17",
+        "8" = "CD4_Treg",
+        "9" = "CD4_Tex"
+    )
+    cluster_map_tumor_CD8 <- c(
+        "1" = "CD8_Temra",
+        "2" = "CD8_Tex",
+        "3" = "CD8_Tex",
+        "4" = "CD8_Tn",
+        "5" = "CD8_Tn",
+        "6" = "CD8_Temra",
+        "7" = "CD8_Tn",
+        "8" = "CD8_Tn",
+        "9" = "CD8_Tn"
+    )
+    cluster_map_tumor_DN <- c(
+        "1" = "DN_gdT_2",
+        "2" = "DN_gdT_1",
+        "3" = "DN_gdT_2"
     )
 
-    cluster_map_normal <- c(
-        "1" = "CD4_Treg/Th17",
-        "2" = "CD8_Cyto_gdT",
-        "3" = "CD8_Cyto_Ext_gdT",
-        "4" = "Resting_T"
+    cluster_map_normal_CD4 <- c(
+        "1" = "CD4_Tex",
+        "2" = "CD4_Th1/Th17",
+        "3" = "CD4_proliferation"
+    )
+    cluster_map_normal_CD8 <- c(
+        "1" = "CD8_quiescence/gdT_1",
+        "2" = "CD8_proliferation",
+        "3" = "CD8_Tem/gdT_2",
+        "4" = "CD8_Temra"
+    )
+    cluster_map_normal_DN <- c(
+        "1" = "DN_gdT_2",
+        "2" = "DN_gdT_1"
     )
 
-    # Annotate tumor group
-    sc_tcell_clust_tumor$cell_type_dtl <- plyr::mapvalues(
-        sc_tcell_clust_tumor$immune_subcluster,
-        from = names(cluster_map_tumor),
-        to = cluster_map_tumor,
-        warn_missing = FALSE
-    )
+    # Add cell types to sc_tcell_clust_tumor based on the subcluster assignments
+    sc_tcell_clust_tumor$T_cell_type_CD4 <- NA
+    sc_tcell_clust_tumor$T_cell_type_CD8 <- NA
+    sc_tcell_clust_tumor$T_cell_type_DN <- NA
 
-    # Annotate normal group
-    sc_tcell_clust_normal$cell_type_dtl <- plyr::mapvalues(
-        sc_tcell_clust_normal$immune_subcluster,
-        from = names(cluster_map_normal),
-        to = cluster_map_normal,
-        warn_missing = FALSE
-    )
+    # Map CD4 cells in tumor
+    cd4_cells_tumor <- !is.na(sc_tcell_clust_tumor$immune_subcluster_CD4)
+    sc_tcell_clust_tumor$T_cell_type_CD4[cd4_cells_tumor] <- cluster_map_tumor_CD4[as.character(sc_tcell_clust_tumor$immune_subcluster_CD4[cd4_cells_tumor])]
 
-    # Create a combined cell type lookup from both annotated objects
-    cell_type_lookup <- c(
-        setNames(sc_tcell_clust_tumor$cell_type_dtl, colnames(sc_tcell_clust_tumor)),
-        setNames(sc_tcell_clust_normal$cell_type_dtl, colnames(sc_tcell_clust_normal))
-    )
+    # Map CD8 cells in tumor
+    cd8_cells_tumor <- !is.na(sc_tcell_clust_tumor$immune_subcluster_CD8)
+    sc_tcell_clust_tumor$T_cell_type_CD8[cd8_cells_tumor] <- cluster_map_tumor_CD8[as.character(sc_tcell_clust_tumor$immune_subcluster_CD8[cd8_cells_tumor])]
 
-    # Transfer annotations to combined object
-    sc_tcell_clust$cell_type_dtl <- cell_type_lookup[colnames(sc_tcell_clust)]
+    # Map DN cells in tumor
+    dn_cells_tumor <- !is.na(sc_tcell_clust_tumor$immune_subcluster_DN)
+    sc_tcell_clust_tumor$T_cell_type_DN[dn_cells_tumor] <- cluster_map_tumor_DN[as.character(sc_tcell_clust_tumor$immune_subcluster_DN[dn_cells_tumor])]
+
+    # Add cell types to sc_tcell_clust_normal based on the subcluster assignments
+    sc_tcell_clust_normal$T_cell_type_CD4 <- NA
+    sc_tcell_clust_normal$T_cell_type_CD8 <- NA
+    sc_tcell_clust_normal$T_cell_type_DN <- NA
+
+    # Map CD4 cells in normal
+    cd4_cells_normal <- !is.na(sc_tcell_clust_normal$immune_subcluster_CD4)
+    sc_tcell_clust_normal$T_cell_type_CD4[cd4_cells_normal] <- cluster_map_normal_CD4[as.character(sc_tcell_clust_normal$immune_subcluster_CD4[cd4_cells_normal])]
+
+    # Map CD8 cells in normal
+    cd8_cells_normal <- !is.na(sc_tcell_clust_normal$immune_subcluster_CD8)
+    sc_tcell_clust_normal$T_cell_type_CD8[cd8_cells_normal] <- cluster_map_normal_CD8[as.character(sc_tcell_clust_normal$immune_subcluster_CD8[cd8_cells_normal])]
+
+    # Map DN cells in normal
+    dn_cells_normal <- !is.na(sc_tcell_clust_normal$immune_subcluster_DN)
+    sc_tcell_clust_normal$T_cell_type_DN[dn_cells_normal] <- cluster_map_normal_DN[as.character(sc_tcell_clust_normal$immune_subcluster_DN[dn_cells_normal])]
+
+    # Add a combined cell_type_dtl field by taking the first non-NA value from the T_cell_type fields
+    sc_tcell_clust_tumor <- sc_tcell_clust_tumor %>%
+        mutate(cell_type_dtl = case_when(
+            !is.na(T_cell_type_CD4) ~ T_cell_type_CD4,
+            !is.na(T_cell_type_CD8) ~ T_cell_type_CD8,
+            !is.na(T_cell_type_DN) ~ T_cell_type_DN,
+            TRUE ~ "Undefined"
+        ))
+
+    sc_tcell_clust_normal <- sc_tcell_clust_normal %>%
+        mutate(cell_type_dtl = case_when(
+            !is.na(T_cell_type_CD4) ~ T_cell_type_CD4,
+            !is.na(T_cell_type_CD8) ~ T_cell_type_CD8,
+            !is.na(T_cell_type_DN) ~ T_cell_type_DN,
+            TRUE ~ "Undefined"
+        ))
+    # Merge the tumor and normal objects for the combined object
+    sc_tcell_clust <- sc_final %>% filter(cell_type == "Tcell")
+    sc_tcell_clust@meta.data$cell_type_dtl <- NA
+    sc_tcell_clust@meta.data[colnames(sc_tcell_clust_normal), "cell_type_dtl"] <- sc_tcell_clust_normal$cell_type_dtl
+    sc_tcell_clust@meta.data[colnames(sc_tcell_clust_tumor), "cell_type_dtl"] <- sc_tcell_clust_tumor$cell_type_dtl
+
 
     # Run UMAP
     sc_tcell_clust <- RunUMAP(sc_tcell_clust,
-        dims = 1:30, reduction = "harmony", reduction.name = "umap_tcell",
+        dims = 1:30, reduction = "scvi", reduction.name = "umap_tcell",
         min.dist = 0.05,
         spread = 0.3
     )
@@ -298,15 +691,30 @@ Tcell_annotate <- function(sc_tcell_clust_list) {
     markers <- list(
         # Core T cell subtype markers
         "CD4/8" = c("CD4", "CD8A", "CD8B"),
-        "Treg" = c("FOXP3", "IL2RA", "TNFRSF18"),
-        "Th17" = c("RORC", "CCR6", "IL17F"),
-        "Naive" = c("CCR7", "LEF1", "SELL"),
-        "CTLA4" = c("CTLA4"),
-        "gdT" = c("TRDV1", "TRDV2", "TRGC1"),
-        "Cytotoxic" = c("GZMB", "GZMK", "IFNG", "TNF"),
-        "Exhausted" = c("PDCD1", "LAG3", "TIGIT", "HAVCR2", "ENTPD1"),
-        # Cluster 8: γδ T cells with Th2-like features
-        "Th1/2" = c("TBX21", "STAT4", "IL4", "IL5", "IL13")
+        "CD4_Tc" = c("GZMA", "GZMK"),
+        "CD4_Tcm" = c("S100A10", "LTB"),
+        # "Tem" = c("CXCR4", "KLRB1"),
+        "CD4_Temra" = c("NKG7", "GNLY"),
+        "CD4_Tex" = c("SRGN", "DUSP4"),
+        "Tn" = c("LEF1", "SELL", "TCF7", "CCR7"),
+        "Tfh" = c("PDCD1", "ICOS"),
+        "CD4_Th1" = c("CCL5", "CXCR3"),
+        "CD4_Th17" = c("IL7R", "CCR6"),
+        "CD4_Th22" = c("IL22", "AHR"),
+        # "Treg" = c("FOXP3", "IL2RA"),
+        # "Trm" = c("ITGA4", "ITGB2"),
+        # "NKT-like" = c("NKG7", "KLRD1", "FCGR3A"),
+        "CD8_proliferation" = c("MKI67", "HMGB2", "HMGB1"),
+        # "quiescence" = c("RUNX1"),
+        # "senescence" = c("ATM", "TSC2"),
+        "CD8_Tc" = c("CX3CR1", "GZMH"),
+        # "Tcm" = c("CREM", "IL7R", "CCR7"),
+        "CD8_Tem" = c("CST7", "EOMES", "GZMK", "GZMA"),
+        "CD8_Temra" = c("GNLY", "FGFBP2"),
+        "CD8_Tex" = c("LAG3", "TIGIT", "HAVCR2", "PDCD1"),
+        "CD8_Tn_quiescence" = c("BTG1", "KLF2", "BTG2"),
+        "CD8_Tn_IFN_response" = c("STAT1", "IFITM1", "IRF1", "IFITM3"),
+        "DN_gdT" = c("TRGC1", "TRGC2", "TRDC", "TRDV1", "TRDV2")
     )
 
     # Calculate and plot heatmap
@@ -315,18 +723,18 @@ Tcell_annotate <- function(sc_tcell_clust_list) {
         method = "zscore", order = "value", group.by = "cell_type_dtl"
     )
 
-    toplot <- toplot[, c("CD4_Treg/Th17", "CD4_TN/Th17", "CD4_TN", "CD8_FOXP3_Treg", "CD8_Cyto_gdT", "CD8_Cyto_Ext_gdT", "Resting_T", "CTLA4_T")]
-    # Get unique cell types from both groups
-    cell_types <- unique(sc_tcell_clust$cell_type_dtl)
+    # toplot <- toplot[, c("CD4_Treg/Th17", "CD4_TN/Th17", "CD4_TN", "CD8_FOXP3_Treg", "CD8_Cyto_gdT", "CD8_Cyto_Ext_gdT", "Resting_T", "CTLA4_T")]
+    # # Get unique cell types from both groups
+    # cell_types <- unique(sc_tcell_clust$cell_type_dtl)
 
     gene_groups <- rep(names(markers), lengths(markers)) %>%
         setNames(markers %>% unlist()) %>%
         .[rownames(toplot)] %>%
         factor(levels = unique(rep(names(markers), lengths(markers))))
 
-    p2 <- Heatmap(toplot %>% t(), lab_fill = "zscore", facet_col = gene_groups) +
+    p2 <- Heatmap(toplot %>% t(), lab_fill = "zscore", facet_col = gene_groups, text.size = 5) +
         theme(plot.background = element_rect(fill = "white"))
-    ggsave("results/108.Tcell/tcell_annotated_heatmap.png", p2, width = 15, height = 8)
+    ggsave("results/108.Tcell/tcell_annotated_heatmap.png", p2, width = 18, height = 8)
 
     p <- DotPlot2(sc_tcell_clust,
         features = markers,
@@ -337,86 +745,126 @@ Tcell_annotate <- function(sc_tcell_clust_list) {
         theme(plot.background = element_rect(fill = "white"))
     ggsave("results/108.Tcell/tcell_annotated_dotplot.png", p, width = 15, height = 8)
 
-    # Calculate and plot heatmaps for normal group
-    toplot_normal <- CalcStats(sc_tcell_clust %>% filter(group == "normal"),
+    markers <- list(
+        # "activated" = c("TNFRSF18", "TNFRSF4"),
+        # "Tc" = c("GZMA", "GZMK"),
+        "proliferation" = c("MKI67"),
+        # "Tcm" = c("S100A10", "LTB"),
+        # "Tem" = c("CXCR4", "KLRB1"),
+        # "Temra" = c("NKG7", "GNLY"),
+        "Tex" = c("SRGN", "DUSP4"),
+        # "Tfh" = c("PDCD1", "ICOS"),
+        "Th1" = c("CCL5", "CXCR3"),
+        "Th17" = c("IL7R", "CCR6"),
+        "Th22" = c("IL22", "AHR"),
+        # "Ttsg" = c("ISG15", "STAT1"),
+        "Tn" = c("SELL", "TCF7", "CCR7"),
+        "Treg" = c("FOXP3", "IL2RA")
+        # "Trm" = c("ITGA4", "ITGB2"),
+        # "Tstr" = c("HSP90AA1", "HSPA1B")
+    )
+    # calculate for CD4, CD8, and DN separately
+    toplot_CD4 <- CalcStats(
+        sc_tcell_clust %>%
+            # filter cell_type_dtl starts with CD4
+            filter(grepl("^CD4", cell_type_dtl)),
         features = markers %>% unlist(),
         method = "zscore", order = "value", group.by = "cell_type_dtl"
     )
 
-    gene_groups_normal <- rep(names(markers), lengths(markers)) %>%
+    gene_groups_CD4 <- rep(names(markers), lengths(markers)) %>%
         setNames(markers %>% unlist()) %>%
-        .[rownames(toplot_normal)] %>%
+        .[rownames(toplot_CD4)] %>%
         factor(levels = unique(rep(names(markers), lengths(markers))))
-
-    p2_normal <- Heatmap(toplot_normal %>% t(), lab_fill = "zscore", facet_col = gene_groups_normal) +
+    p1 <- Heatmap(toplot_CD4 %>% t(), lab_fill = "zscore", facet_col = gene_groups_CD4, text.size = 5) +
+        labs(title = "CD4 T Cell Subtypes") +
         theme(plot.background = element_rect(fill = "white"))
-    ggsave("results/108.Tcell/tcell_annotated_normal_heatmap.png", p2_normal, width = 15, height = 8)
+    ggsave("results/108.Tcell/tcell_annotated_CD4_heatmap.png", p1, width = 15, height = 8)
+    p <- DotPlot2(
+        sc_tcell_clust %>%
+            filter(grepl("^CD4", cell_type_dtl)),
+        features = markers,
+        group.by = "cell_type_dtl",
+        split.by = "group",
+        show_grid = FALSE
+    ) +
+        theme(plot.background = element_rect(fill = "white"))
+    ggsave("results/108.Tcell/tcell_annotated_CD4_dotplot.png", p, width = 15, height = 8)
 
-    # Calculate and plot heatmaps for tumor group
-    toplot_tumor <- CalcStats(sc_tcell_clust %>% filter(group == "tumor"),
+
+    markers <- list(
+        "proliferation" = c("MKI67", "HMGB2", "HMGB1"),
+        "quiescence" = c("RUNX1"),
+        # "senescence" = c("ATM", "TSC2"),
+        # "Tc" = c("CX3CR1", "GZMH"),
+        # "Tcm" = c("CREM", "IL7R", "CCR7"),
+        "Tem" = c("CST7", "EOMES", "GZMK", "GZMA"),
+        "Temra" = c("GNLY", "FGFBP2"),
+        "Tex" = c("LAG3", "TIGIT", "HAVCR2", "PDCD1"),
+        "Tn" = c("LEF1", "SELL", "TCF7", "CCR7")
+        # "Tn_quiescence" = c("BTG1", "KLF2", "BTG2"),
+        # "Tn_IFN_response" = c("STAT1", "IFITM1", "IRF1", "IFITM3")
+    )
+    toplot_CD8 <- CalcStats(
+        sc_tcell_clust %>%
+            # filter cell_type_dtl starts with CD4
+            filter(grepl("^CD8", cell_type_dtl)),
         features = markers %>% unlist(),
         method = "zscore", order = "value", group.by = "cell_type_dtl"
     )
 
-    gene_groups_tumor <- rep(names(markers), lengths(markers)) %>%
+    gene_groups_CD8 <- rep(names(markers), lengths(markers)) %>%
         setNames(markers %>% unlist()) %>%
-        .[rownames(toplot_tumor)] %>%
+        .[rownames(toplot_CD8)] %>%
         factor(levels = unique(rep(names(markers), lengths(markers))))
-
-    p2_tumor <- Heatmap(toplot_tumor %>% t(), lab_fill = "zscore", facet_col = gene_groups_tumor) +
+    p2 <- Heatmap(toplot_CD8 %>% t(), lab_fill = "zscore", facet_col = gene_groups_CD8, text.size = 5) +
+        labs(title = "CD8 T Cell Subtypes") +
         theme(plot.background = element_rect(fill = "white"))
-    ggsave("results/108.Tcell/tcell_annotated_tumor_heatmap.png", p2_tumor, width = 15, height = 8)
+    ggsave("results/108.Tcell/tcell_annotated_CD8_heatmap.png", p2, width = 15, height = 8)
+    p <- DotPlot2(
+        sc_tcell_clust %>%
+            filter(grepl("^CD8", cell_type_dtl)),
+        features = markers,
+        group.by = "cell_type_dtl",
+        split.by = "group",
+        show_grid = FALSE
+    ) +
+        theme(plot.background = element_rect(fill = "white"))
+    ggsave("results/108.Tcell/tcell_annotated_CD8_dotplot.png", p, width = 15, height = 8)
 
-    # Comprehensive markers
-    markers_comprehensive <- list(
-        # Core T Cell Markers
-        "T_Cells" = c("CD3D", "CD3E", "CD3G"),
-        "CD4_T_Cells" = c("CD4"),
-        "CD8_T_Cells" = c("CD8A", "CD8B"),
-
-        # Specialized T Cell Subsets
-        "Tregs" = c("FOXP3", "IL2RA", "CTLA4", "TNFRSF18"),
-        "gdT_Cells" = c("TRDC", "TRGC1", "TRGC2", "TRDV1", "TRDV2"),
-        "NK_Cells" = c("NKG7", "GNLY", "KLRD1", "NCAM1", "FCGR3A", "NCR1", "NCR3", "KIR2DL1", "KIR2DL3", "KIR3DL1"),
-
-        # Naive and Memory Markers
-        "Naive_T" = c("CCR7", "SELL", "TCF7", "LEF1", "IL7R", "SKAP1", "THEMIS", "PTPRC"),
-        "Memory_T" = c("CD44", "IL7R", "CD45RO", "PRKCQ", "STAT4"),
-
-        # Tissue-Resident Memory
-        "Trm" = c("ITGAE", "CD69", "CXCR6"),
-
-        # Effector Functions
-        "Effector" = c("GZMA", "GZMB", "GZMH", "GZMK", "PRF1", "IFNG", "TNF", "FASLG"),
-
-        # Exhaustion Markers
-        "Exhausted" = c("PDCD1", "CTLA4", "LAG3", "TIGIT", "HAVCR2", "ENTPD1"),
-
-        # T Helper Subtypes and Key Transcription Factors
-        "Th1" = c("IFNG", "CXCR3", "TBX21"), # TBX21 (T-bet)
-        "Th2" = c("IL4", "IL5", "IL13", "CCR4", "GATA3"),
-        "Th17" = c("IL17A", "IL17F", "IL22", "CCR6", "RORC")
+    markers <- list(
+        "CD4/8" = c("CD4", "CD8A", "CD8B"),
+        "gdT_1" = c("TRDV1"),
+        "gdT_2" = c("TRDV2"),
+        "gdT_constant" = c("TRGC1", "TRGC2", "TRDC")
     )
-
-    # Calculate and plot heatmap
-    toplot_comp <- CalcStats(sc_tcell_clust,
-        features = markers_comprehensive %>% unlist(),
-        method = "zscore", order = "value",
-        group.by = "cell_type_dtl"
+    toplot_DN <- CalcStats(
+        sc_tcell_clust,
+        features = markers %>% unlist(),
+        method = "zscore", order = "value", group.by = "cell_type_dtl"
     )
+    gene_groups_DN <- rep(names(markers), lengths(markers)) %>%
+        setNames(markers %>% unlist()) %>%
+        .[rownames(toplot_DN)] %>%
+        factor(levels = unique(rep(names(markers), lengths(markers))))
+    p3 <- Heatmap(toplot_DN %>% t(), lab_fill = "zscore", facet_col = gene_groups_DN) +
+        labs(title = "CD4+, CD8+, DN T Cell Subtypes") +
+        theme(plot.background = element_rect(fill = "white"))
+    ggsave("results/108.Tcell/tcell_annotated_DN_heatmap.png", p3, width = 15, height = 8)
+    p <- DotPlot2(sc_tcell_clust,
+        features = markers,
+        group.by = "cell_type_dtl",
+        split.by = "group",
+        show_grid = FALSE
+    ) +
+        theme(plot.background = element_rect(fill = "white"))
+    ggsave("results/108.Tcell/tcell_annotated_DN_dotplot.png", p, width = 15, height = 8)
 
-    gene_groups_comp <- rep(names(markers_comprehensive), lengths(markers_comprehensive)) %>%
-        setNames(markers_comprehensive %>% unlist()) %>%
-        .[rownames(toplot_comp)]
-
-    write_csv(
-        toplot_comp %>%
-            as.data.frame() %>%
-            rownames_to_column("gene") %>%
-            mutate(across(where(is.numeric), round, 2)),
-        "results/108.Tcell/tcell_annotated_expression.csv"
-    )
-
+    p <- p1 +
+        p2 +
+        p3 +
+        plot_layout(ncol = 1)
+    ggsave("results/108.Tcell/tcell_annotated_heatmap_combined.png", p, width = 15, height = 25)
     # Return the updated list with annotated objects
     sc_tcell_clust
 }
@@ -957,7 +1405,7 @@ run_tcell_trajectory <- function(sc_tcell) {
     # Run diffusion map
     set.seed(42)
     seu <- Palantir.RunDM(seu,
-        reduction = "harmony",
+        reduction = "scvi",
         conda_env = "base",
         n_components = 30
     )
