@@ -11,8 +11,8 @@ sub_cluster_myeloid <- function(sc_int) {
     sc_int
 }
 sub_annotation_myeloid <- function(sc_int, sc_final) {
-    # remove cluster 7 cells first
-    sc_int <- sc_int %>% filter(immune_subcluster != "7")
+    # # remove cluster 7 cells first
+    # sc_int <- sc_int %>% filter(immune_subcluster != "7")
     # 可视化聚类结果
     p1 <- DimPlot2(sc_int,
         reduction = "umap_integrated",
@@ -205,12 +205,13 @@ sub_annotation_myeloid <- function(sc_int, sc_final) {
 myeloid_annotate <- function(sc_mye_clust) {
     # Create mapping of cluster numbers to cell type annotations
     cluster_map <- c(
-        "1" = "PMP",
+        "1" = "Unknown",
         "2" = "TREM2_LAM",
-        "3" = "Foam",
+        "3" = "M2-like_TAM",
         "4" = "Mast",
         "5" = "Eosinophil",
-        "6" = "DC"
+        "6" = "APOE_LAM",
+        "7" = "PMP"
     )
 
     # Add new annotation column
@@ -233,12 +234,12 @@ myeloid_annotate <- function(sc_mye_clust) {
     # Save the plot
     ggsave("results/107.myeloid/myeloid_annotated.png", p, width = 8, height = 7)
     markers <- list(
-        "PMP" = c("AXL", "LYVE1"), # Tissue-Resident Macrophages
+        "PMP" = c("MKI67", "TOP2A", "KIT"), # Tissue-Resident Macrophages
         "TREM2_LAM" = c("CD40", "STAT1", "TREM2"), # TREM2+ Macrophages
-        "Foam" = c("CCL18", "PPARG", "PLIN2"), # Foam Macrophages
+        "M2-like_TAM" = c("CD68","CD163", "PPARG"), # Foam Macrophages
+        "APOE_LAM" = c("APOE", "ID1"),
         "Mast" = c("TPSAB1", "LYZ", "CCR2"), # Mast Cells
-        "Eosinophil" = c("IL5RA", "EPO", "CXCR2"), # Eosinophils
-        "Dendritic" = c("CD83", "CD86") # Dendritic Cells
+        "Eosinophil" = c("IL5RA", "EPO", "CXCR2") # Eosinophils
     )
 
     # 计算并绘制热图

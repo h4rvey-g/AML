@@ -1,13 +1,4 @@
-paper_final_annotation <- function(sc_final, sc_mye_clust) {
-    # get cells in sc_mye_clust where immune_subcluster == 7
-    steroid_cells <- sc_mye_clust %>%
-        filter(immune_subcluster == 7) %>%
-        pull(cell)
-    # assign steroidogenic to these cells
-    sc_final <- sc_final %>% mutate(
-        cell_type = if_else(cell %in% steroid_cells, "Steroidogenic", cell_type),
-        cell_type_dtl = if_else(cell %in% steroid_cells, "ZF", cell_type_dtl)
-    )
+paper_final_annotation <- function(sc_final) {
     dir.create("results/109.paper/Fig1", showWarnings = FALSE)
     p <- DimPlot2(sc_final, reduction = "umap_integrated", group.by = "cell_type_dtl", label = TRUE) +
         theme(plot.background = element_rect(fill = "white"))
@@ -19,14 +10,14 @@ paper_final_annotation <- function(sc_final, sc_mye_clust) {
         "CLC" = c("TH", "CHGA"),
         "Endo" = c("PECAM1", "EMCN"),
         "Fib" = c("COL1A1", "COL3A1", "THY1"),
-        "PSC" = c("RGS5", "PDGFRB"),
+        "PSC" = c("RGS5", "PDGFRB", "ACTA2"),
         "Adipo" = c("ADIPOQ", "FABP4", "PPARG"),
         "Tcell" = c("CD3D", "CD3E", "TRBC1"),
         "Bcell" = c("CD19", "CD79A", "MS4A1"),
         "Myeloid" = c("ITGAM", "CD33"),
+        "Neural" = c("PTPRD", "RBFOX1", "HCN1", "SYT16"),
         "Plasma" = c("CD38", "SDC1", "IGHG1"),
-        "LEC" = c("PDPN", "PROX1", "NR2F2"),
-        "Eryth" = c("HBB", "GYPA", "SLC4A1")
+        "LEC" = c("PDPN", "PROX1", "NR2F2")
     )
 
     p <- DotPlot2(sc_final,
@@ -100,6 +91,62 @@ paper_final_annotation <- function(sc_final, sc_mye_clust) {
     ggsave("results/109.paper/Fig1/final_annotation_heatmap_normal.png", p_normal, width = 14, height = 5)
     ggsave("results/109.paper/Fig1/final_annotation_heatmap_combined.png", p_combined, width = 14, height = 10)
     ggsave("results/109.paper/Fig1/final_annotation_heatmap.png", p_all, width = 14, height = 7)
+
+    # Create a pie chart showing distribution of cells in tumor vs normal
+    cell_distribution <- sc_final %>%
+        group_by(group) %>%
+        summarise(cell_count = n()) %>%
+        mutate(percentage = cell_count / sum(cell_count) * 100)
+    
+    # Create the pie chart
+    p_pie <- ggplot(cell_distribution, aes(x = "", y = cell_count, fill = group)) +
+        geom_bar(stat = "identity", width = 1) +
+        coord_polar("y", start = 0) +
+        scale_fill_manual(values = c("normal" = "#4DBBD5FF", "tumor" = "#E64B35FF")) +
+        labs(
+            title = "Distribution of Cells by Sample Type",
+            fill = "Sample Type"
+        ) +
+        geom_text(aes(label = paste0(round(percentage, 1), "%\n(", cell_count, " cells)")), 
+                  position = position_stack(vjust = 0.5)) +
+        theme_void() +
+        theme(plot.background = element_rect(fill = "white"))
+    
+    ggsave("results/109.paper/Fig1/cell_distribution_pie.png", p_pie, width = 6, height = 6)
+
+    # Create a cell count summary by sample
+    sample_distribution <- sc_final %>%
+        group_by(orig.ident) %>%
+        summarise(cell_count = n()) %>%
+        mutate(
+            percent = round(cell_count / sum(cell_count) * 100, 2)
+        ) %>%
+        arrange(orig.ident)
+    
+    # Save the data as TSV
+    write_tsv(sample_distribution, "results/109.paper/Fig1/sample_cell_counts.tsv")
+    # Create a bar plot for cell type distribution within tumor and normal
+    cell_type_dist <- sc_final %>%
+        group_by(group, cell_type) %>%
+        summarise(cell_count = n(), .groups = "drop") %>%
+        group_by(group) %>%
+        mutate(percentage = cell_count / sum(cell_count) * 100) %>%
+        ungroup()
+    
+    p_bar <- ggplot(cell_type_dist, aes(x = group, y = percentage, fill = cell_type)) +
+        geom_bar(stat = "identity", position = "stack") +
+        scale_fill_brewer(palette = "Set3") +
+        labs(
+            title = "Cell Type Distribution by Sample",
+            x = "Sample Type",
+            y = "Percentage",
+            fill = "Cell Type"
+        ) +
+        theme_bw() +
+        theme(plot.background = element_rect(fill = "white"))
+    
+    ggsave("results/109.paper/Fig1/cell_type_distribution_bar.png", p_bar, width = 8, height = 6)
+    
     "results/109.paper/Fig1"
 }
 paper_clc_expression_by_sample <- function(sc_final) {

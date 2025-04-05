@@ -34,11 +34,13 @@ list(
     tar_target(sc_int_preview, process_sc_preview(sc_raw_filtered)),
     tar_target(sc_doublet, find_doublet(sc_int_preview)), # 添加新的 target
     tar_target(sc_int, process_sc(sc_raw_filtered, sc_doublet)),
-    tar_target(sc_cluster, cluster_data(sc_int)),
+    tar_target(sc_int_2, integrate_data_2(sc_int)),
+    tar_target(sc_cluster_2, cluster_data_2(sc_int_2)),
     tar_target(cell_type_path, "results/102.cluster_annotate/cell_type.tsv", format = "file"),
-    tar_target(sc_annotate, annotate_data(sc_cluster, cell_type_path)),
-    tar_target(sc_sub_stero, sub_cluster_steroidogenic(sc_annotate)),
-    # tar_target(sc_final, final_annotation(sc_annotate, sc_sub_stero)),
+    tar_target(sc_annotate_2, annotate_data_2(sc_cluster_2)),
+    tar_target(sc_primary_2, primary_annotation(sc_annotate_2)),
+    tar_target(sc_primary_opt, optimize_annotation(sc_primary_2)),
+    tar_target(sc_final_2, final_annotation_2(sc_primary_opt)),
     tar_target(sc_final, sc_final_2),
     tar_target(anno_DEG_path, find_DEGs_pseudo_bulk(sc_final), format = "file"),
     # tar_target(anndata, save_annotate(sc_final)),
@@ -84,13 +86,14 @@ list(
     tar_target(tcell_GSEA_path, run_tcell_GSEA(sc_tcell), format = "file"),
     tar_target(t_cell_type, unique(sc_tcell$cell_type_dtl)),
     tar_target(tcell_DEG_path, tcell_DEG_tumor_vs_normal(sc_tcell, t_cell_type), format = "file", pattern = map(t_cell_type)),
+    tar_target(tcell_DEG_all_path, tcell_DEG_tumor_vs_normal_all(sc_tcell), format = "file"),
     tar_target(Tex_TRM_correlations, analyze_CD8_Tex_TRM_correlations(sc_tcell)),
     tar_target(GSEA_Tex_TRM_path, run_GSEA_Tex_TRM(sc_tcell), format = "file"),
     tar_target(sc_adipo, cluster_adipo(sc_final)),
     tar_target(adipo_DEG_plot_path, adipo_DEG_plot(sc_adipo), format = "file"),
 
     # paper plot
-    tar_target(paper_final_annotation_path, paper_final_annotation(sc_final, sc_mye_clust), format = "file"),
+    tar_target(paper_final_annotation_path, paper_final_annotation(sc_final), format = "file"),
     tar_target(paper_clc_expression_by_sample_path, paper_clc_expression_by_sample(sc_final), format = "file"),
     tar_target(paper_myeloid_annotate_path, paper_myeloid_annotate(sc_mye), format = "file"),
     tar_target(paper_myeloid_lipid_DEG_path, paper_myeloid_lipid_DEG(sc_mye), format = "file"),
@@ -99,12 +102,6 @@ list(
     tar_target(paper_tcell_fate_DEG_path, paper_tcell_fate_DEG(sc_tcell), format = "file"),
     
     # re cluster
-    tar_target(sc_int_2, integrate_data_2(sc_int)),
-    tar_target(sc_cluster_2, cluster_data_2(sc_int_2)),
-    tar_target(sc_annotate_2, annotate_data_2(sc_cluster_2, cell_type_path)),
-    tar_target(sc_primary_2, primary_annotation(sc_annotate_2)),
-    tar_target(sc_primary_opt, optimize_annotation(sc_primary_2)),
-    tar_target(sc_final_2, final_annotation_2(sc_primary_opt)),
     tar_target(cell_types, unique(sc_final_2$cell_type_dtl)),
     tar_target(DEG_cluster_path, DEG_cluster(sc_final_2, cell_types), format = "file", pattern = map(cell_types)),
     tar_target(compare_neural_clc_path, compare_neural_clc(sc_final_2), format = "file")

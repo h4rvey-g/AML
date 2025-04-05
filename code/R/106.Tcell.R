@@ -1207,6 +1207,56 @@ tcell_DEG_tumor_vs_normal <- function(sc_tcell, t_cell_type) {
     return("results/108.Tcell/DEG_tumor_vs_normal")
 }
 
+tcell_DEG_tumor_vs_normal_all <- function(sc_tcell) {
+    sc_pseudo <- AggregateExpression(sc_tcell, assays = "RNA", return.seurat = T, group.by = c("group", "dataset"))
+    Idents(sc_pseudo) <- "group"
+
+    deg <- FindMarkers(
+        sc_pseudo,
+        ident.1 = "tumor",
+        ident.2 = "normal",
+        test.use = "DESeq2",
+        min.cells.group = 2
+    ) %>%
+        Add_Pct_Diff() %>%
+        rownames_to_column("gene") %>%
+        as_tibble() %>%
+        filter(p_val_adj < 0.05) %>%
+        filter((avg_log2FC > 0 & pct.1 > 0.2) | (avg_log2FC < 0 & pct.2 > 0.2)) %>%
+        arrange(desc(abs(avg_log2FC))) %>%
+        filter(!str_starts(gene, "CYP")) %>%
+        filter(!str_starts(gene, "MT-"))
+
+    write_tsv(
+        deg %>%
+            mutate(across(where(is.numeric), ~ ifelse(abs(.) < 0.001, signif(., 3), round(., 3)))),
+        paste0("results/108.Tcell/DEG_tumor_vs_normal/all_Tcell_DEG.tsv")
+    )
+
+    Idents(sc_tcell) <- "group"
+    deg <- FindMarkers(
+        sc_tcell,
+        ident.1 = "tumor",
+        ident.2 = "normal",
+        test.use = "MAST",
+        min.cells.group = 2
+    ) %>%
+        Add_Pct_Diff() %>%
+        rownames_to_column("gene") %>%
+        as_tibble() %>%
+        filter(p_val_adj < 0.05) %>%
+        filter((avg_log2FC > 0 & pct.1 > 0.2) | (avg_log2FC < 0 & pct.2 > 0.2)) %>%
+        arrange(desc(abs(avg_log2FC))) %>%
+        filter(!str_starts(gene, "CYP")) %>%
+        filter(!str_starts(gene, "MT-"))
+    write_tsv(
+        deg %>%
+            mutate(across(where(is.numeric), ~ ifelse(abs(.) < 0.001, signif(., 3), round(., 3)))),
+        paste0("results/108.Tcell/DEG_tumor_vs_normal/all_Tcell_DEG_MAST.tsv")
+    )
+    "results/108.Tcell/DEG_tumor_vs_normal"
+}
+
 analyze_CD8_Tex_TRM_correlations <- function(sc_tcell) {
     # 创建结果目录
     dir.create("results/108.Tcell/correlation", showWarnings = FALSE, recursive = TRUE)
@@ -1305,80 +1355,85 @@ analyze_CD8_Tex_TRM_correlations <- function(sc_tcell) {
         width = 15, height = 7
     )
 }
-run_GSEA_Tex_TRM <- function(sc_tcell) {
-    options(max.print = 12, spe = "human")
-    dir.create("results/108.Tcell/GSEA_Tex_TRM", showWarnings = FALSE, recursive = TRUE)
+run_GSEA_Tcell_pathways <- function(sc_tcell) {
+    all_gs <- getGeneSets(library = c("H", "C2", "C5"))
 
-    # Create custom gene set of adenosine
-    adenosine_genes <- SearchDatabase(
-        item = "adenosine",
-        type = "SetName",
-        return = "genelist",
-        database = "GO",
-        n.min = 3
+    # Filter gene sets related to lipid metabolism using keywords
+    lipid_keywords <- c(
+        "lipid", "triglyceride", "fatty acid", "cholesterol",
+        "lipoprotein", "sterol", "steroid", "adipocyte", "fat"
     )
 
-    # Run GSEA for adenosine gene set
-    sc_tcell <- GeneSetAnalysis(sc_tcell, genesets = adenosine_genes, nCores = 30)
-    matr <- sc_tcell@misc$AUCell$genesets
-    matr <- RenameGO(matr, add_id = FALSE)
-    rownames(matr) <- stringr::str_to_title(stringr::str_to_lower(rownames(matr)))
+    # Find gene sets containing these keywords
+    lipid_gs <- list()
+    for (gs_name in names(all_gs)) {
+        if (any(sapply(lipid_keywords, function(x) grepl(x, tolower(gs_name))))) {
+            lipid_gs[[gs_name]] <- all_gs[[gs_name]]
+        }
+    }
 
-    # Overall heatmap for adenosine pathways
-    p <- Heatmap(
-        CalcStats(matr, f = sc_tcell$cell_type_dtl, method = "zscore", order = "p", n = 20),
-        lab_fill = "zscore"
-    ) +
-        theme(text = element_text(size = 14))
-    ggsave("results/108.Tcell/GSEA_Tex_TRM/Heatmap_adenosine.png", p, width = 14, height = 14)
-    write_tsv(
-        CalcStats(matr, f = sc_tcell$cell_type_dtl, method = "zscore", order = "p", n = 20) %>%
-            as.data.frame() %>% rownames_to_column("pathway"),
-        "results/108.Tcell/GSEA_Tex_TRM/Heatmap_adenosine.tsv"
-    )
-    # Create custom gene set of hypoxia
-    hypoxia_genes <- SearchDatabase(
-        item = "hypoxia",
-        type = "SetName",
-        return = "genelist",
-        database = "GO",
-        n.min = 3
+    # Print how many gene sets we're using
+    cat("Running GSEA with", length(lipid_gs), "lipid-related gene sets\n")
+
+    # Run GSEA on myeloid cells using UCell (fastest method and handles dropouts well)
+    sc_mye <- runEscape(sc_mye,
+        gene.sets = lipid_gs,
+        method = "UCell",
+        min.size = 5,
+        new.assay.name = "GSEA_lipid",
+        BPPARAM = BiocParallel::MulticoreParam(workers = parallel::detectCores() - 1)
     )
 
-    # Run GSEA for hypoxia gene set
-    sc_tcell <- GeneSetAnalysis(sc_tcell, genesets = hypoxia_genes, nCores = 30)
-    matr <- sc_tcell@misc$AUCell$genesets
-    matr <- RenameGO(matr, add_id = FALSE)
-    rownames(matr) <- stringr::str_to_title(stringr::str_to_lower(rownames(matr)))
-
-    # Overall heatmap for hypoxia pathways
-    p <- Heatmap(
-        CalcStats(matr, f = sc_tcell$cell_type_dtl, method = "zscore", order = "p", n = 20),
-        lab_fill = "zscore"
-    ) +
-        theme(text = element_text(size = 14))
-    ggsave("results/108.Tcell/GSEA_Tex_TRM/Heatmap_hypoxia.png", p, width = 14, height = 14)
-    # write tsv files
-    write_tsv(
-        CalcStats(matr, f = sc_tcell$cell_type_dtl, method = "zscore", order = "p", n = 20) %>%
-            as.data.frame() %>% rownames_to_column("pathway"),
-        "results/108.Tcell/GSEA_Tex_TRM/Heatmap_hypoxia.tsv"
+    # Perform normalization to account for dropout effects
+    sc_mye <- performNormalization(sc_mye,
+        assay = "GSEA_lipid",
+        gene.sets = lipid_gs,
+        make.positive = TRUE
     )
-    "results/108.Tcell/GSEA_Tex_TRM"
+
+    # Identify top differentially enriched pathways between tumor and normal
+    # Need to set identities for proper comparison
+    sc_mye$cell_type_group <- paste(sc_mye$cell_type_dtl, sc_mye$group, sep = "_")
+    Idents(sc_mye) <- "cell_type_group"
+
+    # Function to perform differential enrichment for a cell type
+    diff_enrichment <- function(cell_type) {
+        ident1 <- paste0(cell_type, "_tumor")
+        ident2 <- paste0(cell_type, "_normal")
+
+        if ((ident1 %in% Idents(sc_mye)) && (ident2 %in% Idents(sc_mye))) {
+            results <- FindMarkers(
+                sc_mye,
+                assay = "GSEA_lipid_normalized",
+                ident.1 = ident1,
+                ident.2 = ident2,
+                min.pct = 0,
+                logfc.threshold = 0
+            ) %>%
+                rownames_to_column("pathway") %>%
+                as_tibble() %>%
+                mutate(cell_type = cell_type) %>%
+                filter(p_val_adj < 0.05) %>%
+                arrange(desc(abs(avg_log2FC)))
+
+            return(results)
+        } else {
+            return(NULL)
+        }
+    }
 }
 
 run_tcell_trajectory <- function(sc_tcell) {
     dir.create("results/108.Tcell/trajectory", showWarnings = FALSE, recursive = TRUE)
     tar_load(sc_tcell)
     library(reticulate)
-    py_run_string("")
+    reticulate::use_virtualenv("./scveloenv")
     library(SeuratExtend)
     library(tidyseurat)
     sc_tcell <- sc_tcell %>% filter(group == "tumor")
 
     # 1. scVelo Analysis
     # Convert Seurat object to AnnData for scVelo
-    dir.create("data/108.Tcell/trajectory", showWarnings = FALSE, recursive = TRUE)
     Seu2Adata(sc_tcell, save.adata = "data/108.Tcell/trajectory/tcell.h5ad", conda_env = "base")
     adata_path <- "data/108.Tcell/trajectory/tcell.h5ad"
     seu <- sc_tcell
@@ -1440,21 +1495,22 @@ run_tcell_trajectory <- function(sc_tcell) {
     # Select start cell (CD4_TN cluster)
     p <- DimPlot(seu, reduction = "ms", group.by = "cell_type_dtl", label = TRUE, repel = TRUE) +
         theme(plot.background = element_rect(fill = "white"))
-    start_cell <- CellSelector(p)
-    start_cell <- colnames(seu)[which(seu$cell_type_dtl == "CD4_TN")[1]]
-    # fate1_cell <- CellSelector(p)
-    # fate2_cell <- CellSelector(p)
-    # fate3_cell <- CellSelector(p)
+    # start_cell <- CellSelector(p)
+    start_cell <- c("T4_CELL2591_N4", "T4_CELL10945_N2")
+    # fate1_cell <- "T4_CELL5829_N2"
+    # fate2_cell <- "T4_CELL18974_N1"
+    # Th22_cell <- CellSelector(p)
 
     # Calculate pseudotime
     seu <- Palantir.Pseudotime(seu,
         start_cell = start_cell, conda_env = "base", n_jobs = 10
-        # terminal_states = c("fate1" = fate1_cell, "fate2" = fate2_cell, "fate3" = fate3_cell)
+        # terminal_states = c("Th22_fate" = fate1_cell, "Tex_fate" = fate2_cell)
     )
 
     # Get pseudotime data
     ps <- seu@misc$Palantir$Pseudotime
-    colnames(ps)[3:4] <- c("fate1", "fate2")
+    ps <- ps[, -4]
+    colnames(ps)[3:4] <- c("Tex_fate", "Th22_fate")
     seu@meta.data[, colnames(ps)] <- ps
 
     # Plot pseudotime and entropy
@@ -1508,93 +1564,89 @@ run_tcell_trajectory <- function(sc_tcell) {
     # )
     # ggsave("results/108.Tcell/trajectory/gene_trends.png", p3, width = 10, height = 8)
 
-    # fate1_genes <- c(
-    #     "PRF1",        # Key cytolytic protein for target cell killing
-    #     "GZMK",        # Granzyme K, serine protease involved in cytotoxicity
-    #     "GNLY",        # Granulysin, antimicrobial protein in cytotoxic cells
-    #     "KLRC3",       # NK cell receptor family member
-    #     "KLRC4-KLRK1", # NK cell activating receptor
-    #     "CD244",       # NK cell receptor that regulates cytotoxicity
-    #     "RUNX3",       # Master regulator of CD8+ T cell differentiation
-    #     "TOX",         # Critical for effector and exhausted CD8+ T cell development
-    #     "CCL5"         # Chemokine expressed by activated T cells
-    # )
-    # fate2_genes <- c(
-    #     "TSHZ2",      # Associated with regulatory T cell function
-    #     "SERINC5",    # Membrane protein expressed in CD4+ T cells
-    #     "PRKCA",      # Protein kinase C alpha, involved in T cell activation pathways
-    #     "RASGRF2",    # Involved in T cell receptor signaling
-    #     "TIAM1"      # Regulator of T cell migration
-    # )
-    # Define gene sets that highlight fate differences
-    tf_genes <- c(
-        "RORC", # Th17 transcription factor
-        "FOXP3", # Regulatory T cell master regulator
-        "TBX21", # T-bet, Th1/cytotoxic transcription factor
-        "GATA3" # Th2 cells transcription factor
-    )
-
-    effector_genes <- c(
-        "IL17F", # Th17 cytokine
-        "IFNG", # Th1/cytotoxic cytokine
-        "PRF1", # Perforin, cytotoxic effector
-        "GZMA", # Granzyme A, cytotoxic effector
-        "GZMB" # Granzyme B, cytotoxic effector
-    )
-
-    surface_genes <- c(
-        "CD4", # Helper T cells marker
-        "CD8A", # Cytotoxic T cells marker
-        "TRDV1", # γδ T cell receptor marker
-        "TRDV2", # γδ T cell receptor marker
-        "ENTPD1", # CD39, Treg suppressive function
-        "IL2RA" # CD25, Treg marker
-    )
-
-    immunoregulatory_genes <- c(
-        "CTLA4", # Checkpoint inhibitor, high in Tregs
-        "PDCD1", # PD-1, exhaustion marker
-        "TIGIT", # Inhibitory receptor
-        "NKG7", # Natural killer cell granule protein 7
-        "GNLY", # Granulysin, cytotoxic molecule
-        "CCR6" # Chemokine receptor for Th17 cell migration
-    )
     # Define core exhaustion gene set
     core_exhaustion_genes <- c(
         "PDCD1", # PD-1
-        "CTLA4", # CTLA-4
         "HAVCR2", # TIM-3
         "LAG3", # Lymphocyte activation gene 3
-        "TIGIT", # T cell immunoreceptor with Ig and ITIM domains
-        "ENTPD1" # CD39
+        "TIGIT" # T cell immunoreceptor with Ig and ITIM domains
+    )
+
+    th22_related_genes <- list(
+        # Transcription Factors
+        "TF" = c(
+            "AHR", # Primary TF for Th22 development
+            # "RORC",     # RORγt, important for Th22 development (also in Th17)
+            "TBX21", # T-bet, involved in Th22 development
+            "STAT3", # Main signaling mediator for Th22 function
+            "HES1", # Downstream target of NOTCH signaling that promotes Th22 differentiation
+            "SPI1" # PU.1, found infiltrating in cervical cancer samples
+        ),
+
+        # Surface Markers and Receptors
+        "Receptors" = c(
+            "CCR4", # Characteristic chemokine receptor on Th22 cells
+            "CCR6", # Chemokine receptor for Th22 cell migration to tumor microenvironment
+            "CCR10", # Characteristic chemokine receptor on Th22 cells
+            "IL22RA1", # Part of the IL-22 receptor complex
+            "IL22RA2" # Soluble form of IL-22 receptor
+        ),
+
+        # Cytokines Produced
+        "Cytokines_Produced" = c(
+            "IL22", # Primary cytokine produced by Th22 cells
+            "TNF", # Also secreted by Th22 cells
+            "IL13" # Also secreted by Th22 cells
+        ),
+
+        # Cytokines Inducing Th22 Differentiation
+        "Cytokines_Inducing" = c(
+            "TNF", # Required for Th22 differentiation
+            "IL6", # Required for Th22 differentiation
+            "IL12A", # Involved in Th22 development
+            "IL12B", # Involved in Th22 development
+            "IL21", # Involved in Th22 development
+            "IL23A" # Involved in Th22 development
+        ),
+
+        # Signaling Pathway Genes
+        "Signaling" = c(
+            "JAK1", # Primary kinase in IL-22 signaling pathway
+            "STAT3", # Master regulator of Th22 function and primary IL-22 signal transducer
+            "MAPK1", # ERK2, critical for IL-22-induced proliferation
+            "NOTCH1", # Key for T cell differentiation toward Th22 fate
+            "HES1", # NOTCH target essential for Th22 differentiation
+            "DOT1L", # Epigenetic regulator specifically increased by IL-22
+            "AKT1" # Important for IL-22-induced cell survival pathways
+        )
     )
 
     # Check if genes exist in the dataset
     existing_genes <- intersect(core_exhaustion_genes, rownames(seu))
 
     # For fate 1
-    p_exh_fate1 <- GeneTrendHeatmap.Palantir(
+    p_exh_Tex <- GeneTrendHeatmap.Palantir(
         seu,
         features = existing_genes,
         pseudotime.data = ps,
-        lineage = "fate1",
+        lineage = "Tex_fate",
         conda_env = "base"
     )
-    ggsave("results/108.Tcell/trajectory/exhaustion_heatmap_fate1.png",
-        p_exh_fate1,
+    ggsave("results/108.Tcell/trajectory/exhaustion_heatmap_Tex_fate.png",
+        p_exh_Tex,
         width = 10, height = 6
     )
 
     # For fate 2
-    p_exh_fate2 <- GeneTrendHeatmap.Palantir(
+    p_exh_Th22 <- GeneTrendHeatmap.Palantir(
         seu,
         features = existing_genes,
         pseudotime.data = ps,
-        lineage = "fate2",
+        lineage = "Th22_fate",
         conda_env = "base"
     )
-    ggsave("results/108.Tcell/trajectory/exhaustion_heatmap_fate2.png",
-        p_exh_fate2,
+    ggsave("results/108.Tcell/trajectory/exhaustion_heatmap_Th22_fate.png",
+        p_exh_Th22,
         width = 10, height = 6
     )
 
@@ -1613,130 +1665,19 @@ run_tcell_trajectory <- function(sc_tcell) {
     )
 
     # Generate trend heatmaps for each gene set on both fates
-    # Transcription factors
-    p_tf_fate1 <- GeneTrendHeatmap.Palantir(
-        seu,
-        features = tf_genes,
-        pseudotime.data = ps,
-        lineage = "fate1",
-        conda_env = "base"
-    )
-    ggsave("results/108.Tcell/trajectory/tf_genes_heatmap_fate1.png", p_tf_fate1, width = 10, height = 6)
-
-    p_tf_fate2 <- GeneTrendHeatmap.Palantir(
-        seu,
-        features = tf_genes,
-        pseudotime.data = ps,
-        lineage = "fate2",
-        conda_env = "base"
-    )
-    ggsave("results/108.Tcell/trajectory/tf_genes_heatmap_fate2.png", p_tf_fate2, width = 10, height = 6)
-
-    # Effector molecules
-    p_eff_fate1 <- GeneTrendHeatmap.Palantir(
-        seu,
-        features = effector_genes,
-        pseudotime.data = ps,
-        lineage = "fate1",
-        conda_env = "base"
-    )
-    ggsave("results/108.Tcell/trajectory/effector_genes_heatmap_fate1.png", p_eff_fate1, width = 10, height = 6)
-
-    p_eff_fate2 <- GeneTrendHeatmap.Palantir(
-        seu,
-        features = effector_genes,
-        pseudotime.data = ps,
-        lineage = "fate2",
-        conda_env = "base"
-    )
-    ggsave("results/108.Tcell/trajectory/effector_genes_heatmap_fate2.png", p_eff_fate2, width = 10, height = 6)
-
-    # Surface markers
-    p_surface_fate1 <- GeneTrendHeatmap.Palantir(
-        seu,
-        features = surface_genes,
-        pseudotime.data = ps,
-        lineage = "fate1",
-        conda_env = "base"
-    )
-    ggsave("results/108.Tcell/trajectory/surface_genes_heatmap_fate1.png", p_surface_fate1, width = 10, height = 7)
-
-    p_surface_fate2 <- GeneTrendHeatmap.Palantir(
-        seu,
-        features = surface_genes,
-        pseudotime.data = ps,
-        lineage = "fate2",
-        conda_env = "base"
-    )
-    ggsave("results/108.Tcell/trajectory/surface_genes_heatmap_fate2.png", p_surface_fate2, width = 10, height = 7)
-
-    # Immunoregulatory genes
-    p_imreg_fate1 <- GeneTrendHeatmap.Palantir(
-        seu,
-        features = immunoregulatory_genes,
-        pseudotime.data = ps,
-        lineage = "fate1",
-        conda_env = "base"
-    )
-    ggsave("results/108.Tcell/trajectory/immunoregulatory_genes_heatmap_fate1.png", p_imreg_fate1, width = 10, height = 7)
-
-    p_imreg_fate2 <- GeneTrendHeatmap.Palantir(
-        seu,
-        features = immunoregulatory_genes,
-        pseudotime.data = ps,
-        lineage = "fate2",
-        conda_env = "base"
-    )
-    ggsave("results/108.Tcell/trajectory/immunoregulatory_genes_heatmap_fate2.png", p_imreg_fate2, width = 10, height = 7)
-
-    # Generate trend curves for key discriminating genes
-    key_discriminating_genes <- c("RORC", "TBX21", "ENTPD1", "TRDV1", "IL17F", "GZMB", "CD4", "CD8A")
-    p_trends <- GeneTrendCurve.Palantir(
-        seu,
-        pseudotime.data = ps,
-        features = key_discriminating_genes,
-        point = FALSE,
-        se = TRUE,
-        conda_env = "base"
-    )
-    ggsave("results/108.Tcell/trajectory/key_discriminating_genes_trends.png", p_trends, width = 12, height = 8)
-    # Generate heatmap for fate1 genes
-    p4 <- GeneTrendHeatmap.Palantir(
-        seu,
-        features = fate1_genes,
-        pseudotime.data = ps,
-        lineage = "fate1",
-        conda_env = "base"
-    )
-    ggsave("results/108.Tcell/trajectory/gene_heatmap_fate1.png", p4, width = 12, height = 8)
-
-
-    p5 <- GeneTrendHeatmap.Palantir(
-        seu,
-        features = fate2_genes,
-        pseudotime.data = ps,
-        lineage = "fate2",
-        conda_env = "base"
-    )
-    ggsave("results/108.Tcell/trajectory/gene_heatmap_fate2.png", p5, width = 12, height = 8)
-
-    # 6. Slingshot Analysis
-    sc_tcell <- RunSlingshot(sc_tcell,
-        group.by = "cell_type_dtl",
-        start.clus = "CD4_TN"
-    )
-
-    # Add Slingshot pseudotime to metadata
-    sling <- sc_tcell@misc$slingshot$PCA$SlingPseudotime
-    sc_tcell@meta.data[, colnames(sling)] <- as.data.frame(sling)
-
-    # Plot Slingshot results
-    p5 <- DimPlot2(sc_tcell,
-        features = colnames(sling),
-        cols = "C",
-        theme = NoAxes()
-    )
-    ggsave("results/108.Tcell/trajectory/slingshot_pseudotime.png", p5, width = 12, height = 5)
+    for (geneset in names(th22_related_genes)) {
+        p <- GeneTrendHeatmap.Palantir(
+            seu,
+            features = th22_related_genes[[geneset]],
+            pseudotime.data = ps,
+            lineage = "Th22_fate",
+            conda_env = "base"
+        )
+        ggsave(paste0("results/108.Tcell/trajectory/", geneset, "_heatmap_Th22_fate.png"),
+            p,
+            width = 10, height = 6
+        )
+    }
 
     return(sc_tcell)
 }

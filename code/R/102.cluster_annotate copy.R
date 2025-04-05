@@ -109,7 +109,7 @@ cluster_data_2 <- function(sc_int) {
     sc_int
 }
 
-annotate_data_2 <- function(sc_int, cell_type_path) {
+annotate_data_2 <- function(sc_int) {
     markers <- list(
         "Steroidogenic" = c("NR5A1", "CYP11A1", "CYP11B2", "HSD3B2", "CYP17A1", "CYP21A2"),
         "ZG" = c("DACH1", "VSNL1"),
