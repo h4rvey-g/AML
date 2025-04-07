@@ -205,7 +205,7 @@ sub_annotation_myeloid <- function(sc_int, sc_final) {
 myeloid_annotate <- function(sc_mye_clust) {
     # Create mapping of cluster numbers to cell type annotations
     cluster_map <- c(
-        "1" = "Unknown",
+        "1" = "PVM",
         "2" = "TREM2_LAM",
         "3" = "M2-like_TAM",
         "4" = "Mast",
@@ -239,7 +239,8 @@ myeloid_annotate <- function(sc_mye_clust) {
         "M2-like_TAM" = c("CD68","CD163", "PPARG"), # Foam Macrophages
         "APOE_LAM" = c("APOE", "ID1"),
         "Mast" = c("TPSAB1", "LYZ", "CCR2"), # Mast Cells
-        "Eosinophil" = c("IL5RA", "EPO", "CXCR2") # Eosinophils
+        "Eosinophil" = c("IL5RA", "EPO", "CXCR2"), # Eosinophils
+        "PVM" = c("LYVE1", "MRC1") # Perivascular Macrophages
     )
 
     # 计算并绘制热图
