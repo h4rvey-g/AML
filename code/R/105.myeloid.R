@@ -23,34 +23,42 @@ sub_annotation_myeloid <- function(sc_int, sc_final) {
     ggsave("results/107.myeloid/sub_cluster_immune.png", p1, width = 7, height = 7)
 
     markers <- list(
-        "LYVE1_Mac" = c("LYVE1", "CD163", "MRC1", "MRC1L1"),
-        # Monocytes
-        "Classical_Mono" = c("CD14", "VCAN", "CCR2", "LYZ"),
-        "NonClassical_Mono" = c("FCGR3A", "CX3CR1", "LST1", "MS4A7"),
+        # Tissue-resident & specialized macrophages
+        "LYVE1_Mac" = c("LYVE1", "CD163", "MRC1", "FOLR2"), # Removed MRC1L1 (non-human ortholog)
+        "Kupffer_like" = c("CLEC4F", "ID1"),
+        "Microglia_like" = c("P2RY12", "TMEM119"),
+        "Alveolar_Mac" = c("MARCO", "PPARG"),
 
-        # Macrophages
+        # Monocytes
+        "Classical_Mono" = c("CD14", "VCAN", "CCR2", "LYZ", "S100A8", "S100A9"),
+        "NonClassical_Mono" = c("FCGR3A", "CX3CR1", "LST1", "MS4A7", "NR4A1"),
+
+        # Inflammatory/activated macrophages
         "Mac_M1" = c("CD80", "CD86", "STAT1", "IL1B", "CXCL10", "HLA-DRA", "NOS2", "IL6", "IL12B"),
         "Mac_M2" = c("CD163", "MRC1", "FOLR2", "CCL18", "MAFB"),
+
+        # Lipid-associated macrophages / foam cells
         "Mac_LAM" = c("TREM2", "APOE", "LPL", "FABP4"),
-        "Foam_Cell" = c("CD36", "MSR1", "ADRP", "PLIN2"),
+        "Foam_Cell" = c("CD36", "MSR1", "PLIN2", "ADRP"),
+
+        # Erythroid lineage (exclude these if only immune focus)
+        "Eryth" = c("HBB", "GYPA", "SLC4A1", "ALAS2"),
 
         # Granulocytes
-        "Neutrophil" = c("CSF3R", "CEACAM8", "CXCR2", "LCN2"),
+        "Neutrophil" = c("CSF3R", "CEACAM8", "CXCR2", "LCN2", "MPO"),
         "Eosinophil" = c("CLC", "PRG2", "IL5RA", "EPX", "ALOX15"),
         "Mast" = c("KIT", "TPSAB1", "CMA1", "CPA3"),
 
-        # Activation/Proliferation
+        # Dendritic cells
+        "cDC1" = c("CLEC9A", "XCR1", "BATF3", "IRF8"),
+        "cDC2" = c("CD1C", "FCER1A", "IRF4", "ITGAX"),
+        "mo_DC" = c("CD1C", "FCGR3A", "CCR7", "CD80", "CD86", "LAMP3"),
+
+        # Activation / proliferation
         "Activation" = c("CD83", "CD40", "LAMP1"),
-        "Proliferation" = c("MKI67", "TOP2A", "CENPF"),
-
-        # Tissue-Resident Macrophages
-        "Microglia" = c("P2RY12", "TMEM119"),
-        "Kupffer" = c("CLEC4F", "ID1"),
-        "Alveolar_Mac" = c("MARCO", "PPARG"),
-
-        # DC markers
-        "DC_markers" = c("CD1C", "CLEC9A")
+        "Proliferation" = c("MKI67", "TOP2A", "CENPF")
     )
+
 
     # 计算并绘制热图
     toplot <- CalcStats(sc_int,
@@ -127,91 +135,19 @@ sub_annotation_myeloid <- function(sc_int, sc_final) {
     )
     # 创建DEG结果目录
     dir.create("results/107.myeloid/immune_DEG", showWarnings = FALSE, recursive = TRUE)
-
-    # # 按照数据集和亚群聚合进行DEG分析
-    # sc_pseudo <- AggregateExpression(sc_int,
-    #     assays = "RNA",
-    #     return.seurat = TRUE,
-    #     group.by = c("dataset", "immune_subcluster")
-    # )
-
-    # # 设置比较分组
-    # Idents(sc_pseudo) <- "immune_subcluster"
-    # clusters <- unique(sc_int$immune_subcluster)
-    # clusters <- c("1")
-    # dir.create("results/107.myeloid/immune_DEG", showWarnings = FALSE, recursive = TRUE)
-
-    # # Compare each cluster with all other clusters
-    # for (cluster in clusters) {
-    #     deg <- FindMarkers(
-    #         sc_pseudo,
-    #         ident.1 = cluster,
-    #         test.use = "DESeq2",
-    #         min.cells.group = 2
-    #     ) %>%
-    #         rownames_to_column("gene") %>%
-    #         as_tibble() %>%
-    #         filter(p_val_adj < 0.05) %>%
-    #         filter((avg_log2FC > 0 & pct.1 > 0.2) | (avg_log2FC < 0 & pct.2 > 0.2)) %>%
-    #         arrange(desc(abs(avg_log2FC)))
-    #     if (nrow(deg) == 0) {
-    #         deg <- FindMarkers(
-    #             sc_int,
-    #             ident.1 = cluster,
-    #             test.use = "MAST",
-    #             min.cells.group = 2
-    #         ) %>%
-    #             rownames_to_column("gene") %>%
-    #             as_tibble() %>%
-    #             filter(p_val_adj < 0.05) %>%
-    #             filter((avg_log2FC > 0 & pct.1 > 0.2) | (avg_log2FC < 0 & pct.2 > 0.2)) %>%
-    #             arrange(desc(abs(avg_log2FC)))
-    #     }
-
-    #     write_tsv(deg, sprintf(
-    #         "results/107.myeloid/immune_DEG/%s_vs_rest_DEG.tsv",
-    #         cluster
-    #     ))
-    # }
-
-    # # Compare clusters pairwise
-    # for (i in 1:(length(clusters) - 1)) {
-    #     for (j in (i + 1):length(clusters)) {
-    #         cluster1 <- clusters[i]
-    #         cluster2 <- clusters[j]
-
-    #         deg <- FindMarkers(
-    #             sc_pseudo,
-    #             ident.1 = cluster1,
-    #             ident.2 = cluster2,
-    #             test.use = "DESeq2",
-    #             min.cells.group = 2
-    #         ) %>%
-    #             rownames_to_column("gene") %>%
-    #             as_tibble() %>%
-    #             filter(p_val_adj < 0.05) %>%
-    #             filter((avg_log2FC > 0 & pct.1 > 0.2) | (avg_log2FC < 0 & pct.2 > 0.2)) %>%
-    #             arrange(desc(abs(avg_log2FC)))
-
-    #         write_tsv(deg, sprintf(
-    #             "results/107.myeloid/immune_DEG/%s_vs_%s_DEG.tsv",
-    #             cluster1, cluster2
-    #         ))
-    #     }
-    # }
     sc_int
 }
 
 myeloid_annotate <- function(sc_mye_clust) {
     # Create mapping of cluster numbers to cell type annotations
     cluster_map <- c(
-        "1" = "PVM",
+        "1" = "Tissue-resident_Mac",
         "2" = "TREM2_LAM",
-        "3" = "M2-like_TAM",
+        "3" = "DC",
         "4" = "Mast",
         "5" = "Eosinophil",
         "6" = "APOE_LAM",
-        "7" = "PMP"
+        "7" = "Eryth"
     )
 
     # Add new annotation column
@@ -234,13 +170,13 @@ myeloid_annotate <- function(sc_mye_clust) {
     # Save the plot
     ggsave("results/107.myeloid/myeloid_annotated.png", p, width = 8, height = 7)
     markers <- list(
-        "PMP" = c("MKI67", "TOP2A", "KIT"), # Tissue-Resident Macrophages
         "TREM2_LAM" = c("CD40", "STAT1", "TREM2"), # TREM2+ Macrophages
-        "M2-like_TAM" = c("CD68","CD163", "PPARG"), # Foam Macrophages
+        "DC" = c("PPARG", "CD83", "CD86"), # Foam Macrophages
         "APOE_LAM" = c("APOE", "ID1"),
         "Mast" = c("TPSAB1", "LYZ", "CCR2"), # Mast Cells
         "Eosinophil" = c("IL5RA", "EPO", "CXCR2"), # Eosinophils
-        "PVM" = c("LYVE1", "MRC1") # Perivascular Macrophages
+        "Tissue-resident" = c("LYVE1", "MRC1", "CD163"), # Perivascular Macrophages
+        "Erythrocyte" = c("GYPA", "HBB", "SLC4A1") # Erythrocytes
     )
 
     # 计算并绘制热图
@@ -256,6 +192,56 @@ myeloid_annotate <- function(sc_mye_clust) {
     p2 <- Heatmap(t(toplot), lab_fill = "zscore", facet_col = gene_groups) +
         theme(plot.background = element_rect(fill = "white"))
     ggsave("results/107.myeloid/myeloid_annotate_heatmap.png", p2, width = 10, height = 6)
+
+    markers <- list(
+        # Tissue-resident & specialized macrophages
+        "LYVE1_Mac" = c("LYVE1", "CD163", "MRC1", "FOLR2"), # Removed MRC1L1 (non-human ortholog)
+        "Kupffer_like" = c("CLEC4F", "ID1"),
+        "Microglia_like" = c("P2RY12", "TMEM119"),
+        "Alveolar_Mac" = c("MARCO", "PPARG"),
+
+        # Monocytes
+        "Classical_Mono" = c("CD14", "VCAN", "CCR2", "LYZ", "S100A8", "S100A9"),
+        "NonClassical_Mono" = c("FCGR3A", "CX3CR1", "LST1", "MS4A7", "NR4A1"),
+
+        # Inflammatory/activated macrophages
+        "Mac_M1" = c("CD80", "CD86", "STAT1", "IL1B", "CXCL10", "HLA-DRA", "NOS2", "IL6", "IL12B"),
+        "Mac_M2" = c("CD163", "MRC1", "FOLR2", "CCL18", "MAFB"),
+
+        # Lipid-associated macrophages / foam cells
+        "Mac_LAM" = c("TREM2", "APOE", "LPL", "FABP4"),
+        "Foam_Cell" = c("CD36", "MSR1", "PLIN2", "ADRP"),
+
+        # Erythroid lineage (exclude these if only immune focus)
+        "Eryth" = c("HBB", "GYPA", "SLC4A1", "ALAS2"),
+
+        # Granulocytes
+        "Neutrophil" = c("CSF3R", "CEACAM8", "CXCR2", "LCN2", "MPO"),
+        "Eosinophil" = c("CLC", "PRG2", "IL5RA", "EPX", "ALOX15"),
+        "Mast" = c("KIT", "TPSAB1", "CMA1", "CPA3"),
+
+        # Dendritic cells
+        "cDC1" = c("CLEC9A", "XCR1", "BATF3", "IRF8"),
+        "cDC2" = c("CD1C", "FCER1A", "IRF4", "ITGAX"),
+        "mo_DC" = c("CD1C", "FCGR3A", "CCR7", "CD80", "CD86", "LAMP3"),
+
+        # Activation / proliferation
+        "Activation" = c("CD83", "CD40", "LAMP1"),
+        "Proliferation" = c("MKI67", "TOP2A", "CENPF")
+    )
+    toplot <- CalcStats(sc_mye_clust,
+        features = markers %>% unlist(),
+        method = "zscore", order = "value", group.by = "cell_type_dtl"
+    )
+
+    gene_groups <- rep(names(markers), lengths(markers)) %>%
+        setNames(markers %>% unlist()) %>%
+        .[rownames(toplot)]
+
+    write_tsv(
+        toplot %>% as.data.frame() %>% rownames_to_column("gene"),
+        "results/107.myeloid/myeloid_annotate_zscore.tsv"
+    )
     p <- DotPlot2(sc_mye_clust,
         features = markers,
         group.by = "cell_type_dtl",
@@ -595,365 +581,78 @@ run_myeloid_GSEA <- function(sc_mye) {
 
     return("results/107.myeloid/GSEA")
 }
-run_myeloid_customGSEA <- function(sc_mye) {
-    dir.create("results/107.myeloid/customGSEA", showWarnings = FALSE, recursive = TRUE)
-
-    # Define pathways of interest for each cell type
-    pathways <- list(
-        "Foam" = c(
-            "Fatty Acid Beta-Oxidation",
-            "Brown Fat Cell Differentiation",
-            "Contractile Actin Filament Bundle",
-            "Stress Fiber"
-        ),
-        "TREM2_Mac" = c(
-            "Complement-Mediated Synapse Pruning",
-            "Clathrin-Coated Endocytic Vesicle Membrane",
-            "Membrane Hyperpolarization",
-            "Smooth Muscle Cell-Matrix Adhesion",
-            "Mono-ADP-D-Ribose Binding"
-        ),
-        "FOLR2_Mac" = c(
-            "Positive Regulation of Cardiac Muscle Relaxation",
-            "Proteasome Regulatory Particle",
-            "Response to Carbon Dioxide",
-            "Cellular Response to Staurosporine",
-            "V1b Vasopressin Receptor Binding"
-        ),
-        "M2_Mac" = c(
-            "Canonical Wnt Signaling Pathway Involved In Positive Regulation Of Epithelial To Mesenchymal Transition",
-            "Regulation of Response to Oxidative Stress",
-            "Lipid Droplet",
-            "Monocyte Chemotaxis",
-            "Phagolysosome Assembly"
-        ),
-        "Mast" = c(
-            "Cell Surface Pattern Recognition Receptor Signaling Pathway",
-            "Myeloid Progenitor Cell Differentiation",
-            "Fc-Gamma Receptor I Complex Binding",
-            "Regulation of Fibroblast Growth Factor Receptor Signaling Pathway",
-            "Interleukin-18 Receptor Complex"
-        ),
-        "Eosino" = c(
-            "Ion Channel Complex",
-            "Transmitter-Gated Ion Channel Activity Involved In Regulation Of Postsynaptic Membrane Potential",
-            "Presynapse Assembly",
-            "Gephyrin Clustering Involved In Postsynaptic Density Assembly"
-        )
-    )
-
-    options(max.print = 12, spe = "human")
-    # Get custom gene sets for each pathway
-    custom_sets <- lapply(unlist(pathways), function(x) {
-        SearchDatabase(item = x, type = "SetName", return = "genelist", database = "GO")
-    })
-    # Filter each sublist to keep only the longest gene set
-    custom_sets <- lapply(custom_sets, function(x) {
-        # Find the longest gene set
-        lengths <- sapply(x, length)
-        x[which.max(lengths)]
-    })
-    names(custom_sets) <- rep(names(pathways), lengths(pathways))
-    # Get lengths and sum up pathway lengths for each cell type using pipes
-    # Calculate pathway lengths using base R operations
-    pathway_lengths <- tapply(
-        sapply(custom_sets, length),
-        factor(names(custom_sets),
-            levels = unique(names(custom_sets))
-        ),
-        sum
-    )
-    # Create repeated names based on lengths
-    pathway_lengths <- rep(names(pathway_lengths), pathway_lengths)
-
-    # Combine all gene sets into a single list
-    custom_sets <- Reduce(c, custom_sets)
-    names(pathway_lengths) <- names(custom_sets) %>%
-        RenameGO(add_id = FALSE)
-
-    # Run AUCell analysis with custom gene sets
-    sc_mye <- GeneSetAnalysis(sc_mye, genesets = custom_sets, nCores = 30, n.min = 3)
-    matr <- sc_mye@misc$AUCell$genesets
-    toplot <- CalcStats(matr %>% RenameGO(add_id = FALSE),
-        f = sc_mye$cell_type_dtl,
-        method = "zscore",
-        order = "value"
-    )
-
-    p2 <- Heatmap(toplot,
-        lab_fill = "zscore",
-        facet_row = pathway_lengths[rownames(toplot)]
-    ) +
-        theme(plot.background = element_rect(fill = "white"))
-
-    ggsave("results/107.myeloid/customGSEA/grouped_heatmap.png", p2, width = 14, height = 8)
-
-    # Compare tumor vs normal for each cell type
-    for (cell_type in names(pathways)) {
-        sc_subset <- subset(sc_mye, cell_type_dtl == cell_type)
-        if (length(unique(sc_subset$group)) == 2) {
-            relevant_pathways <- pathways[[cell_type]]
-            matr_subset <- matr[relevant_pathways, ]
-
-            p2 <- WaterfallPlot(
-                matr_subset,
-                f = sc_subset$group,
-                ident.1 = "tumor",
-                ident.2 = "normal",
-                color = "p",
-                length = "logFC",
-                title = paste0("Custom Pathways: ", cell_type)
-            )
-            ggsave(paste0(
-                "results/107.myeloid/customGSEA/",
-                gsub("/", "_", cell_type),
-                "_tumor_vs_normal.png"
-            ), p2, width = 10, height = 8)
-        }
-    }
-
-    return("results/107.myeloid/customGSEA")
-}
-myeloid_DEG_tumor_vs_normal <- function(sc_mye) {
-    sc_pseudo <- AggregateExpression(sc_mye, assays = "RNA", return.seurat = T, group.by = c("group", "dataset", "cell_type_dtl"))
+myeloid_DEG_tumor_vs_normal <- function(sc_mye, cell_type) {
+    sc_pseudo <- AggregateExpression(sc_mye, assays = "RNA", return.seurat = TRUE, group.by = c("group", "dataset", "cell_type_dtl"))
     sc_pseudo$cell_type_group <- paste(sc_pseudo$cell_type_dtl, sc_pseudo$group, sep = "_")
     Idents(sc_pseudo) <- "cell_type_group"
-    cell_types <- unique(sc_pseudo$cell_type_dtl)
-    for (cell_type in cell_types) {
-        ident1 <- paste0(cell_type, "_tumor")
-        ident2 <- paste0(cell_type, "_normal")
-        if (!(ident1 %in% Idents(sc_pseudo) && ident2 %in% Idents(sc_pseudo))) {
-            next
-        }
-        deg <- tryCatch(
-            {
-                FindMarkers(
-                    sc_pseudo,
-                    ident.1 = ident1,
-                    ident.2 = ident2,
-                    test.use = "DESeq2",
-                    min.cells.group = 2
-                ) %>%
-                    Add_Pct_Diff() %>%
-                    rownames_to_column("gene") %>%
-                    as_tibble() %>%
-                    filter(p_val_adj < 0.05) %>%
-                    filter((avg_log2FC > 0 & pct.1 > 0.2) | (avg_log2FC < 0 & pct.2 > 0.2)) %>%
-                    arrange(desc(abs(avg_log2FC))) %>% 
-                    filter(!str_starts(gene, "CYP"))
-            },
-            error = function(e) {
-                message("Error in FindMarkers for ", cell_type, ": ", e$message)
-                return(NULL)
-            }
-        )
 
-        if (is.null(deg)) next
-        dir.create("results/107.myeloid/DEG_tumor_vs_normal", showWarnings = FALSE, recursive = TRUE)
-        write_tsv(deg, paste0("results/107.myeloid/DEG_tumor_vs_normal/", cell_type, "_DEG.tsv"))
+    ident1 <- paste0(cell_type, "_tumor")
+    ident2 <- paste0(cell_type, "_normal")
+
+    if (!(ident1 %in% Idents(sc_pseudo) && ident2 %in% Idents(sc_pseudo))) {
+        return(NULL)
     }
-    sc_mye$cell_type_group <- paste(sc_mye$cell_type_dtl, sc_mye$group, sep = "_")
-    Idents(sc_mye) <- "cell_type_group"
-    cell_types <- unique(sc_mye$cell_type_dtl)
-    # Set up parallel processing
-    cores <- min(parallel::detectCores() - 1, length(cell_types))
-    cl <- parallel::makeCluster(cores)
-    doParallel::registerDoParallel(cl)
 
-    # Parallel foreach loop
-    results <- foreach(cell_type = cell_types, .packages = c("Seurat", "tidyverse", "dplyr")) %dopar% {
-        ident1 <- paste0(cell_type, "_tumor")
-        ident2 <- paste0(cell_type, "_normal")
-        if ((ident1 %in% Idents(sc_mye) && ident2 %in% Idents(sc_mye))) {
-            deg <- FindMarkers(
-                sc_mye,
+    deg <- tryCatch(
+        {
+            FindMarkers(
+                sc_pseudo,
                 ident.1 = ident1,
                 ident.2 = ident2,
-                test.use = "MAST",
+                test.use = "DESeq2",
                 min.cells.group = 2
             ) %>%
-                scCustomize::Add_Pct_Diff() %>%
+                Add_Pct_Diff() %>%
                 rownames_to_column("gene") %>%
                 as_tibble() %>%
                 filter(p_val_adj < 0.05) %>%
                 filter((avg_log2FC > 0 & pct.1 > 0.2) | (avg_log2FC < 0 & pct.2 > 0.2)) %>%
                 arrange(desc(abs(avg_log2FC))) %>%
                 filter(!str_starts(gene, "CYP"))
-            write_tsv(deg, paste0("results/107.myeloid/DEG_tumor_vs_normal/", cell_type, "_DEG_MAST.tsv"))
+        },
+        error = function(e) {
+            message("Error in FindMarkers for ", cell_type, ": ", e$message)
+            return(NULL)
         }
+    )
+
+    if (is.null(deg)) {
+        sc_mye$cell_type_group <- paste(sc_mye$cell_type_dtl, sc_mye$group, sep = "_")
+        Idents(sc_mye) <- "cell_type_group"
+
+        if (!(ident1 %in% Idents(sc_mye) && ident2 %in% Idents(sc_mye))) {
+            return(NULL)
+        }
+
+        deg <- tryCatch(
+            {
+                FindMarkers(
+                    sc_mye,
+                    ident.1 = ident1,
+                    ident.2 = ident2,
+                    test.use = "MAST",
+                    min.cells.group = 2
+                ) %>%
+                    scCustomize::Add_Pct_Diff() %>%
+                    rownames_to_column("gene") %>%
+                    as_tibble() %>%
+                    filter(p_val_adj < 0.05) %>%
+                    filter((avg_log2FC > 0 & pct.1 > 0.2) | (avg_log2FC < 0 & pct.2 > 0.2)) %>%
+                    arrange(desc(abs(avg_log2FC))) %>%
+                    filter(!str_starts(gene, "CYP"))
+            },
+            error = function(e) {
+                message("Error in FindMarkers using MAST for ", cell_type, ": ", e$message)
+                return(NULL)
+            }
+        )
     }
 
-    # Stop cluster
-    parallel::stopCluster(cl)
-    return("results/107.myeloid/DEG_tumor_vs_normal")
-}
-
-plot_myeloid <- function(sc_mye) {
-    # Create directory for plots
-    dir.create("results/107.myeloid/plots", showWarnings = FALSE, recursive = TRUE)
-
-    # Define B cell related genes to plot by category
-    b_cell_genes_by_category <- list(
-        "Steroidogenesis" = c("STAR", "CYP11B1", "HSD3B2"),
-        "Lipid Metabolism" = c("SCD5", "CLU", "PEBP1"),
-        "Immunoglobulins" = c("IGHG1", "IGHG4", "IGLC2")
-    )
-
-    # Subset TREM2+ macrophages and calculate expression statistics
-    trem2_cells <- sc_mye[, sc_mye$cell_type_dtl == "TREM2_Mac"]
-
-    # Extract expression matrix for B cell genes
-    all_genes <- unlist(b_cell_genes_by_category)
-    expr_mat <- GetAssayData(trem2_cells, slot = "data")[all_genes, ]
-
-    # Scale the expression matrix
-    expr_mat_scaled <- t(scale(t(expr_mat)))
-
-    # Get tumor/normal status for each cell
-    group_order <- trem2_cells$group %>% factor(levels = c("normal", "tumor"))
-    column_order <- order(group_order)
-
-    # Create annotation for tumor/normal
-    anno_col <- ComplexHeatmap::HeatmapAnnotation(
-        Group = trem2_cells$group[column_order],
-        col = list(Group = c("normal" = "#00BFC4", "tumor" = "#F8766D"))
-    )
-
-    # Create gene category split
-    gene_categories <- rep(names(b_cell_genes_by_category), sapply(b_cell_genes_by_category, length))
-    names(gene_categories) <- unlist(b_cell_genes_by_category)
-
-    # Create heatmap with split columns by group and split rows by category
-    p <- ComplexHeatmap::Heatmap(as.matrix(expr_mat[, column_order]),
-        name = "Expression",
-        col = viridis::viridis(100),
-        cluster_rows = TRUE,
-        cluster_columns = TRUE,
-        show_row_dend = FALSE,
-        show_column_dend = FALSE,
-        show_column_names = FALSE,
-        column_title = "TREM2+ Macrophages",
-        row_title = "Genes related to immunoglobulins, lipid metabolism",
-        top_annotation = anno_col,
-        column_split = trem2_cells$group[column_order],
-        row_split = gene_categories[rownames(expr_mat)],
-        row_gap = unit(5, "mm")
-    )
-
-    # Save the heatmap
-    png("results/107.myeloid/plots/trem2_mac_heatmap.png", width = 1000, height = 800, res = 100)
-    ComplexHeatmap::draw(p)
-    dev.off()
-
-    # 定义基因组
-    mast_genes <- list(
-        "Steroidogenesis" = c("STAR", "CYP11B1", "HSD3B2"),
-        "Immune" = c("IL7R", "ANGPT1", "C3", "RARRES2"),
-        "Detoxification" = c("GSTA1", "GSTA4", "AOX1", "SULT2A1"),
-        "ECM_Adhesion" = c("NOV", "SPON2", "DCN", "SLIT2", "SORBS2", "CDH2", "ITGA1", "LAMA2")
-    )
-
-    # 提取Mast细胞
-    mast_cells <- sc_mye[, sc_mye$cell_type_dtl == "Mast"]
-
-    # 提取基因表达矩阵
-    all_genes <- unlist(mast_genes)
-    expr_mat <- GetAssayData(mast_cells, slot = "data")[all_genes, ]
-
-    # 标准化表达矩阵
-    expr_mat_scaled <- t(scale(t(expr_mat)))
-
-    # 获取tumor/normal分组信息
-    group_order <- mast_cells$group %>% factor(levels = c("normal", "tumor"))
-    column_order <- order(group_order)
-
-    # 创建分组注释
-    anno_col <- ComplexHeatmap::HeatmapAnnotation(
-        Group = mast_cells$group[column_order],
-        col = list(Group = c("tumor" = "#F8766D", "normal" = "#00BFC4"))
-    )
-
-    # 创建基因类别分组
-    gene_categories <- rep(names(mast_genes), sapply(mast_genes, length))
-    names(gene_categories) <- unlist(mast_genes)
-
-    # 创建热图
-    p <- ComplexHeatmap::Heatmap(as.matrix(expr_mat[, column_order]),
-        name = "Expression",
-        col = viridis::viridis(100),
-        cluster_rows = TRUE,
-        cluster_columns = TRUE,
-        show_row_dend = FALSE,
-        show_column_dend = FALSE,
-        show_column_names = FALSE,
-        column_title = "Mast Cells",
-        row_title = "Steroidogenesis and Immune Related Genes",
-        top_annotation = anno_col,
-        column_split = mast_cells$group[column_order],
-        row_split = gene_categories[rownames(expr_mat)],
-        row_gap = unit(5, "mm")
-    )
-
-    # 保存热图
-    png("results/107.myeloid/plots/mast_cells_heatmap.png",
-        width = 1000, height = 800, res = 100
-    )
-    ComplexHeatmap::draw(p)
-    dev.off()
-    # 定义基因组
-    m2_genes <- list(
-        "Steroidogenesis" = c("STAR", "CYP11B1", "HSD3B2"),
-        "Metabolic" = c("GSTA1", "MEG3", "MEG8", "DCN"),
-        "Immune" = c("TIMD4", "ITGAD", "VCAM1")
-    )
-
-    # 提取M2巨噬细胞
-    m2_cells <- sc_mye[, sc_mye$cell_type_dtl == "M2_Mac"]
-
-    # 获取基因表达矩阵
-    all_genes <- unlist(m2_genes)
-    expr_mat <- GetAssayData(m2_cells, slot = "data")[all_genes, ]
-
-    # 标准化表达矩阵
-    expr_mat_scaled <- t(scale(t(expr_mat)))
-
-    # 获取tumor/normal分组信息
-    group_order <- m2_cells$group %>% factor(levels = c("normal", "tumor"))
-    column_order <- order(group_order)
-
-    # 创建分组注释
-    anno_col <- ComplexHeatmap::HeatmapAnnotation(
-        Group = m2_cells$group[column_order],
-        col = list(Group = c("tumor" = "#F8766D", "normal" = "#00BFC4"))
-    )
-
-    # 创建基因类别分组
-    gene_categories <- rep(names(m2_genes), sapply(m2_genes, length))
-    names(gene_categories) <- unlist(m2_genes)
-
-    # 创建热图
-    p1 <- ComplexHeatmap::Heatmap(as.matrix(expr_mat_scaled[, column_order]),
-        name = "Expression",
-        col = viridis::viridis(100),
-        cluster_rows = TRUE,
-        cluster_columns = TRUE,
-        show_row_dend = FALSE,
-        show_column_dend = FALSE,
-        show_column_names = FALSE,
-        column_title = "M2 Macrophages",
-        row_title = "Key M2 Macrophage Genes",
-        top_annotation = anno_col,
-        column_split = m2_cells$group[column_order],
-        row_split = gene_categories[rownames(expr_mat)],
-        row_gap = unit(5, "mm")
-    )
-
-    # 保存热图
-    png("results/107.myeloid/plots/m2_macrophage_heatmap.png",
-        width = 1000, height = 800, res = 100
-    )
-    ComplexHeatmap::draw(p1)
-    dev.off()
+    dir.create("results/107.myeloid/DEG_tumor_vs_normal", showWarnings = FALSE, recursive = TRUE)
+    if (!is.null(deg)) {
+        write_tsv(deg, paste0("results/107.myeloid/DEG_tumor_vs_normal/", cell_type, "_DEG.tsv"))
+    }
+    return(paste0("results/107.myeloid/DEG_tumor_vs_normal/", cell_type, "_DEG.tsv"))
 }
 
 run_myeloid_trajectory <- function(sc_mye) {
@@ -962,9 +661,10 @@ run_myeloid_trajectory <- function(sc_mye) {
     library(reticulate)
     py_run_string("")
     library(SeuratExtend)
+    library(tidyseurat)
     # remove eosinophils and mast
     sc_mye <- sc_mye %>%
-        filter(cell_type_dtl != "Eosinophil" & cell_type_dtl != "Mast")
+        filter(!cell_type_dtl %in% c("Eosinophil", "Mast", "Eryth", "DC"))
 
     # 1. scVelo Analysis
     # Convert Seurat object to AnnData for scVelo
@@ -1025,15 +725,21 @@ run_myeloid_trajectory <- function(sc_mye) {
     # Select start cell (Eosinophil cluster as starting point)
     p <- DimPlot(seu, reduction = "ms", group.by = "cell_type_dtl", label = TRUE, repel = TRUE) +
         theme(plot.background = element_rect(fill = "white"))
-    # start_cell <- CellSelector(p)
-    start_cell <- colnames(seu)[which(seu$cell_type_dtl == "PMP")[1]]
+    start_cell <- CellSelector(p)
+    fate1 <- "N1_CELL71521_N1"
+    fate2 <- "N1_CELL78136_N1"
+    # fate3 <- "T4_CELL47246_N1"
+    # start_cell <- colnames(seu)[which(seu$cell_type_dtl == "Tissue-resident_Mac")[1]]
 
     # Calculate pseudotime
-    seu <- Palantir.Pseudotime(seu, start_cell = start_cell, conda_env = "base")
+    seu <- Palantir.Pseudotime(seu,
+        start_cell = start_cell, conda_env = "base",
+        terminal_states = c("fate1" = fate1, "fate2" = fate2)
+    )
 
     # Get pseudotime data
     ps <- seu@misc$Palantir$Pseudotime
-    colnames(ps)[3:4] <- c("fate1", "fate2")
+    # colnames(ps)[3:4] <- c("fate1", "fate2")
     seu@meta.data[, colnames(ps)] <- ps
 
     # Plot pseudotime and entropy
@@ -1061,60 +767,48 @@ run_myeloid_trajectory <- function(sc_mye) {
     )
 
     # # 5. Gene Expression Dynamics
-    # # Define key genes for myeloid cells
-    # key_genes <- c(
-    #     "CD14", "FCGR3A", # Monocyte markers
-    #     "CD163", "MRC1", # M2 macrophage markers
-    #     "TREM2", "APOE", # TREM2+ macrophage markers
-    #     "FOLR2", "CCL18", # FOLR2+ macrophage markers
-    #     "IL1B", "TNF" # Inflammatory markers
-    # )
 
-    # # Generate trend curves
-    # p3 <- GeneTrendCurve.Palantir(
-    #     seu,
-    #     pseudotime.data = ps,
-    #     features = key_genes,
-    #     point = FALSE,
-    #     se = TRUE,
-    #     conda_env = "base"
-    # )
-    # ggsave("results/107.myeloid/trajectory/gene_trends.png", p3, width = 10, height = 8)
+fate1_genes <- c(
+    "TREM2", "TYROBP",     # Lipid & damage sensing
+    "SPP1",                # Osteopontin: matrix remodeling
+    "CD9", "LGALS3", "LGALS1",   # Galectins & signatures, immunoreg.
+    "CLEC7A",              # Damage sensing
+    "AXL", "MERTK",        # Apoptotic cell clearance
+    "CTSB", "CTSL",        # Lysosomal function
+    "GPNMB",               # Fibrosis/immunomod
+    "LPL",                 # Lipoprotein uptake
+    "FABP4", "FABP5"       # Fatty acid chaperones
+)
 
-    # # Define genes for different fates
-    # fate1_genes <- c(
-    #     "CD163", "MRC1", "FOLR2", "CCL18", # M2/FOLR2 markers
-    #     "TREM2", "APOE", "LPL", "FABP4", # TREM2+ markers
-    #     "IL10", "TGFB1", "IGF1", # Anti-inflammatory
-    #     "PPARG", "ABCA1", "NR1H3" # Lipid metabolism
-    # )
 
-    # fate2_genes <- c(
-    #     "IL1B", "TNF", "CXCL10", "IL6", # Pro-inflammatory
-    #     "CD80", "CD86", "STAT1", # M1 activation
-    #     "TLR4", "TLR2", "NOD2", # Pattern recognition
-    #     "CCR2", "CCL2", "ICAM1", # Recruitment/adhesion
-    #     "HIF1A", "VEGFA", "MMP9" # Tissue remodeling
-    # )
+fate2_genes <- c(
+    "APOE", "ABCA1", "ABCG1",
+    "PPARG", "NR1H3", "PLTP",
+    "MRC1",                # Homeostatic/anti-inflammatory
+    "IRAK1", "TRAF6",      # miR-146a NF-κB regulatory axis
+    "MERTK",               # Efferocytosis, resolution via ApoE
+    "SELENOP"      # Antioxidant defense
+)
 
-    # # Generate heatmaps for each fate
-    # p4 <- GeneTrendHeatmap.Palantir(
-    #     seu,
-    #     features = fate1_genes,
-    #     pseudotime.data = ps,
-    #     lineage = "fate1",
-    #     conda_env = "base"
-    # )
-    # ggsave("results/107.myeloid/trajectory/gene_heatmap_fate1.png", p4, width = 12, height = 8)
 
-    # p5 <- GeneTrendHeatmap.Palantir(
-    #     seu,
-    #     features = fate2_genes,
-    #     pseudotime.data = ps,
-    #     lineage = "fate2",
-    #     conda_env = "base"
-    # )
-    # ggsave("results/107.myeloid/trajectory/gene_heatmap_fate2.png", p5, width = 12, height = 8)
+    # Generate heatmaps for each fate
+    p4 <- GeneTrendHeatmap.Palantir(
+        seu,
+        features = fate1_genes,
+        pseudotime.data = ps,
+        lineage = "fate1",
+        conda_env = "base"
+    )
+    ggsave("results/107.myeloid/trajectory/gene_heatmap_fate1.png", p4, width = 12, height = 8)
+
+    p5 <- GeneTrendHeatmap.Palantir(
+        seu,
+        features = fate2_genes,
+        pseudotime.data = ps,
+        lineage = "fate2",
+        conda_env = "base"
+    )
+    ggsave("results/107.myeloid/trajectory/gene_heatmap_fate2.png", p5, width = 12, height = 8)
 
     # # 6. Slingshot Analysis
     # sc_mye <- RunSlingshot(sc_mye,
@@ -1135,124 +829,4 @@ run_myeloid_trajectory <- function(sc_mye) {
     # ggsave("results/107.myeloid/trajectory/slingshot_pseudotime.png", p6, width = 12, height = 5)
 
     return(sc_mye)
-}
-
-run_myeloid_trajectory_sep_group <- function(sc_mye, cell_group = NULL) {
-    dir.create("results/107.myeloid/trajectory", showWarnings = FALSE, recursive = TRUE)
-    library(reticulate)
-    py_run_string("")
-    library(SeuratExtend)
-
-    # Filter by group if specified
-    if (!is.null(cell_group)) {
-        sc_mye <- sc_mye[, sc_mye$group == cell_group]
-        group_suffix <- paste0("_", cell_group)
-        output_dir <- paste0("results/107.myeloid/trajectory/", cell_group)
-        dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)
-    } else {
-        group_suffix <- ""
-        output_dir <- "results/107.myeloid/trajectory"
-    }
-
-    # remove eosinophils and mast
-    sc_mye <- sc_mye %>%
-        filter(cell_type_dtl != "Eosinophil" & cell_type_dtl != "Mast")
-
-    # 1. scVelo Analysis
-    # Convert Seurat object to AnnData for scVelo
-    dir.create(paste0("data/107.myeloid/trajectory", group_suffix), showWarnings = FALSE, recursive = TRUE)
-    adata_path <- paste0("data/107.myeloid/trajectory", group_suffix, "/myeloid", group_suffix, ".h5ad")
-    Seu2Adata(sc_mye, save.adata = adata_path, conda_env = "base")
-
-    seu <- scVelo.SeuratToAnndata(
-        sc_mye,
-        filename = adata_path,
-        velocyto.loompath = "data/103.self_workflow/velocyto_combined.loom",
-        prefix = "",
-        postfix = "",
-        remove_duplicates = TRUE,
-        conda_env = "base"
-    )
-
-    # Generate velocity plots
-    scVelo.Plot(
-        color = "cell_type_dtl",
-        basis = "umap_mye_cell_embeddings",
-        save = paste0(output_dir, "/velocity_umap", group_suffix, ".png"),
-        figsize = c(7, 6),
-        conda_env = "base"
-    )
-
-    # 2. Palantir Analysis
-    # Run diffusion map
-    seu <- Palantir.RunDM(seu,
-        reduction = "harmony",
-        conda_env = "base"
-    )
-
-    p <- DimPlot2(seu, reduction = "ms", group.by = "cell_type_dtl", label = TRUE, repel = TRUE) +
-        theme(plot.background = element_rect(fill = "white")) +
-        ggtitle(paste0("Diffusion Map - ", ifelse(is.null(cell_group), "All Cells", cell_group)))
-    ggsave(paste0(output_dir, "/plantir_dm", group_suffix, ".png"), p, width = 7, height = 6)
-
-    # Get cells from seu and update adata
-    cells <- colnames(seu)
-    py_run_string(sprintf("adata = adata[adata.obs.index.isin(%s)]", paste0("[", paste0("'", cells, "'", collapse = ","), "]")))
-
-    # Add ms dimension reduction to AnnData object
-    adata.AddDR(seu, dr = "ms", scv.graph = TRUE, conda_env = "base")
-
-    # Plot velocity using ms coordinates
-    scVelo.Plot(
-        color = "cell_type_dtl",
-        basis = "ms",
-        save = paste0(output_dir, "/velocity_ms", group_suffix, ".png"),
-        figsize = c(7, 6),
-        conda_env = "base"
-    )
-
-    # Select start cell (PMP cluster as starting point)
-    start_cells <- which(seu$cell_type_dtl == "PMP")
-    if (length(start_cells) > 0) {
-        start_cell <- colnames(seu)[start_cells[1]]
-    } else {
-        # Fallback if PMP cells don't exist in this group
-        start_cell <- colnames(seu)[1]
-        warning(paste0("No PMP cells found in ", ifelse(is.null(cell_group), "dataset", cell_group), ", using first cell instead."))
-    }
-
-    # Calculate pseudotime
-    seu <- Palantir.Pseudotime(seu, start_cell = start_cell, conda_env = "base")
-
-    # Get pseudotime data
-    ps <- seu@misc$Palantir$Pseudotime
-    colnames(ps)[3:4] <- c("fate1", "fate2")
-    seu@meta.data[, colnames(ps)] <- ps
-
-    # Plot pseudotime and entropy
-    p1 <- DimPlot2(seu,
-        features = colnames(ps),
-        reduction = "ms",
-        cols = list(Entropy = "D"),
-        theme = NoAxes()
-    ) + theme(plot.background = element_rect(fill = "white")) +
-        ggtitle(paste0("Pseudotime - ", ifelse(is.null(cell_group), "All Cells", cell_group)))
-    ggsave(paste0(output_dir, "/palantir_pseudotime", group_suffix, ".png"), p1, width = 12, height = 12)
-
-    # 4. CellRank Analysis
-    # Add pseudotime to adata
-    adata.AddMetadata(seu, col = colnames(ps), conda_env = "base")
-
-    # Run CellRank
-    Cellrank.Compute(time_key = "Pseudotime", conda_env = "base")
-
-    # Generate CellRank plots
-    Cellrank.Plot(
-        color = "cell_type_dtl",
-        basis = "ms",
-        save = paste0(output_dir, "/cellrank_ms", group_suffix, ".png"),
-        conda_env = "base"
-    )
-
-    return(seu)
 }
