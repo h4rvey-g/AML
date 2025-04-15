@@ -97,7 +97,7 @@ paper_final_annotation <- function(sc_final) {
         group_by(group) %>%
         summarise(cell_count = n()) %>%
         mutate(percentage = cell_count / sum(cell_count) * 100)
-    
+
     # Create the pie chart
     p_pie <- ggplot(cell_distribution, aes(x = "", y = cell_count, fill = group)) +
         geom_bar(stat = "identity", width = 1) +
@@ -107,11 +107,12 @@ paper_final_annotation <- function(sc_final) {
             title = "Distribution of Cells by Sample Type",
             fill = "Sample Type"
         ) +
-        geom_text(aes(label = paste0(round(percentage, 1), "%\n(", cell_count, " cells)")), 
-                  position = position_stack(vjust = 0.5)) +
+        geom_text(aes(label = paste0(round(percentage, 1), "%\n(", cell_count, " cells)")),
+            position = position_stack(vjust = 0.5)
+        ) +
         theme_void() +
         theme(plot.background = element_rect(fill = "white"))
-    
+
     ggsave("results/109.paper/Fig1/cell_distribution_pie.png", p_pie, width = 6, height = 6)
 
     # Create a cell count summary by sample
@@ -122,7 +123,7 @@ paper_final_annotation <- function(sc_final) {
             percent = round(cell_count / sum(cell_count) * 100, 2)
         ) %>%
         arrange(orig.ident)
-    
+
     # Save the data as TSV
     write_tsv(sample_distribution, "results/109.paper/Fig1/sample_cell_counts.tsv")
     # Create a bar plot for cell type distribution within tumor and normal
@@ -132,7 +133,7 @@ paper_final_annotation <- function(sc_final) {
         group_by(group) %>%
         mutate(percentage = cell_count / sum(cell_count) * 100) %>%
         ungroup()
-    
+
     p_bar <- ggplot(cell_type_dist, aes(x = group, y = percentage, fill = cell_type)) +
         geom_bar(stat = "identity", position = "stack") +
         scale_fill_brewer(palette = "Set3") +
@@ -144,9 +145,9 @@ paper_final_annotation <- function(sc_final) {
         ) +
         theme_bw() +
         theme(plot.background = element_rect(fill = "white"))
-    
+
     ggsave("results/109.paper/Fig1/cell_type_distribution_bar.png", p_bar, width = 8, height = 6)
-    
+
     "results/109.paper/Fig1"
 }
 paper_clc_expression_by_sample <- function(sc_final) {
@@ -325,41 +326,37 @@ paper_myeloid_annotate <- function(sc_mye) {
 }
 
 paper_myeloid_lipid_DEG <- function(sc_mye) {
-    markers <- list(
-        "Lipid metabolism" = c("GML", "PPARG", "MEG3", "SORBS2", "DHCR24", "SCARB1", "PNPLA3", "FADS2", "FADS1", "SCD5", "CD36"),
-        "Immune/Inflammatory" = c("CCL18", "HMOX1", "VCAM1", "RHOH", "CD247"),
-        "ECM Remodeling" = c("MMP19", "SDC2", "DCN")
+    # markers 按功能分组
+    apoe_markers <- list(
+        "Established lipid & immune regulators" = c("ABCA8", "ABCA1", "ABCG1", "GULP1", "RORA", "FST"),
+        "Additional novel/underappreciated" = c("GGT5", "PRKG1", "KALRN", "AC069544.1", "MEIS1-AS2", "LINC01798")
     )
-    p <- DotPlot2(sc_mye,
-        features = markers,
-        group.by = "cell_type_dtl",
-        split.by = "group",
-        split.by.method = "color",
-        split.by.colors = c("#4DBBD5FF", "#E64B35FF"),
-        show_grid = FALSE
-    ) +
-        theme(plot.background = element_rect(fill = "white"))
-    ggsave("results/109.paper/Fig2/myeloid_lipid_dotplot.png", p, width = 7, height = 7)
-
-    p <- DotPlot2(sc_mye_select,
-        features = markers,
-        group.by = "cell_type_dtl",
-        split.by = "group",
-        split.by.method = "color",
-        split.by.colors = c("#4DBBD5FF", "#E64B35FF"),
-        show_grid = FALSE
-    ) +
-        theme(plot.background = element_rect(fill = "white"))
-    ggsave("results/109.paper/Fig2/myeloid_lipid_select_dotplot.png", p, width = 7, height = 7)
+    trem2_markers <- list(
+        "Complement activation" = c("C3"),
+        "Cell stress & mTOR" = c("DDIT4"),
+        "Immune checkpoints/regulatory" = c("ENTPD1", "SIGLEC8", "PALD1"),
+        "Downregulated migratory/exhausted" = c("NR4A1", "NR4A2", "NR4A3", "RGS1", "CD36", "PPARG"),
+        "Downregulated pro-inflammatory" = c("NLRP3", "FOSB"),
+        "Downregulated kinases" = c("FYN", "BACH2", "MMP19")
+    )
+    # 不再绘制原始 dotplot
 
     # --- Step 2: Prepare the gene list ---
     # Flatten the list of markers into a single vector
-    all_markers <- unlist(markers)
+    # 合并所有 marker
+    all_markers <- unique(unlist(c(apoe_markers, trem2_markers)))
 
-    # Create a data frame to store gene categories
+    # gene 分组信息
     gene_categories <- data.frame(
-        gene = all_markers,
-        category = rep(names(markers), times = sapply(markers, length))
+        gene = unlist(apoe_markers),
+        category = rep(names(apoe_markers), times = sapply(apoe_markers, length))
+    )
+    gene_categories <- rbind(
+        gene_categories,
+        data.frame(
+            gene = unlist(trem2_markers),
+            category = rep(names(trem2_markers), times = sapply(trem2_markers, length))
+        )
     )
 
     # --- Step 3 & 4: Calculate Average Expression, Percentage, and LogFC ---
@@ -398,7 +395,7 @@ paper_myeloid_lipid_DEG <- function(sc_mye) {
 
     # Get DEGs for both cell types
     deg_trem2 <- get_cell_type_degs("TREM2_LAM")
-    deg_foam <- get_cell_type_degs("Foam")
+    deg_foam <- get_cell_type_degs("APOE_LAM")
 
     # Combine DEGs from both cell types
     all_degs <- bind_rows(deg_trem2, deg_foam)
@@ -412,38 +409,45 @@ paper_myeloid_lipid_DEG <- function(sc_mye) {
             pct_expr_normal = pct.2 * 100
         )
 
-    # Add category information
+    # 添加 category 信息
     plot_data <- merge(plot_data, gene_categories, by = "gene")
 
-    # Convert to long format for plotting
+    # 转为长表
     plot_data_long <- pivot_longer(
         plot_data,
         cols = c(pct_expr_tumor, pct_expr_normal),
         names_to = "condition",
         values_to = "pct_expr"
     )
-
-    # Clean up condition names
     plot_data_long$condition <- gsub("pct_expr_", "", plot_data_long$condition)
-
-    # Order genes within each category by logFC
     plot_data_long <- plot_data_long %>%
         group_by(cell_type, category) %>%
         mutate(gene = factor(gene, levels = unique(gene[order(logFC)]))) %>%
-        ungroup()
-
-    # Set category order
-    plot_data_long$category <- factor(plot_data_long$category, levels = names(markers))
-
-    # Sort the data frame so that dots with lower pct_expr appear later (on top)
-    plot_data_long <- plot_data_long %>%
+        ungroup() %>%
         arrange(gene, category, desc(pct_expr))
 
     # Create plots for each cell type
-    for (ct in c("TREM2_LAM", "Foam")) {
-        cell_data <- plot_data_long %>% filter(cell_type == ct)
+    for (ct in c("TREM2_LAM", "APOE_LAM")) {
+        if (ct == "APOE_LAM") {
+            marker_set <- unlist(apoe_markers)
+            marker_levels <- apoe_markers
+        } else if (ct == "TREM2_LAM") {
+            marker_set <- unlist(trem2_markers)
+            marker_levels <- trem2_markers
+        }
+        cell_data <- plot_data_long %>% filter(cell_type == ct, gene %in% marker_set)
+        # 仅对 trem2_LAM，按每个 category 内 logFC 降序排序 gene
+        if (ct == "TREM2_LAM") {
+            cell_data <- cell_data %>%
+                group_by(category) %>%
+                mutate(gene = factor(gene, levels = unique(gene[order(logFC)]))) %>%
+                ungroup()
+        }
+        # 只保留 APOE_LAM 的肿瘤样本
+        if (ct == "APOE_LAM") {
+            cell_data <- cell_data %>% filter(condition == "tumor")
+        }
 
-        # Skip if no data for this cell type
         if (nrow(cell_data) == 0) {
             warning(paste("No DEG data available for", ct))
             next
@@ -473,34 +477,62 @@ paper_myeloid_lipid_DEG <- function(sc_mye) {
         ggsave(filename, p, width = 7, height = 7)
     }
 
-    # Create a combined plot showing both cell types
-    p_combined <- ggplot(plot_data_long, aes(x = logFC, y = gene, size = pct_expr, color = condition, shape = cell_type)) +
-        geom_point(alpha = 0.8) +
-        geom_vline(xintercept = 0, linetype = "dashed", color = "darkgray") +
-        scale_size_continuous(name = "% Expressing", range = c(1, 10)) +
-        scale_color_manual(
-            name = "Condition",
-            values = c("tumor" = "#fc8d59", "normal" = "#91bfdb")
-        ) +
-        scale_shape_manual(
-            name = "Cell Type",
-            values = c("TREM2_LAM" = 16, "Foam" = 17)
-        ) +
-        facet_grid(category ~ ., scales = "free_y", space = "free_y") +
-        labs(x = "Log2 Fold Change (Tumor/Normal)", y = "") +
-        theme_bw() +
-        theme(
-            strip.background = element_rect(fill = "lightgrey"),
-            strip.text = element_text(face = "bold"),
-            panel.grid.minor = element_blank(),
-            legend.position = "right",
-            plot.background = element_rect(fill = "white")
-        )
-    ggsave("results/109.paper/Fig2/myeloid_lipid_combined_dotplot.png", p_combined, width = 8, height = 9)
+    # 可选：如需合并图，可仿照上述方式，仅保留新 marker
 
     "results/109.paper/Fig2"
 }
 
+paper_TREM2_LAM_violin <- function(sc_mye) {
+    # 筛选TREM2_LAM细胞
+    cells <- WhichCells(sc_mye, expression = cell_type_dtl == "TREM2_LAM")
+    sc_sub <- subset(sc_mye, cells = cells)
+    # 绘制小提琴图
+    p <- VlnPlot2(
+        sc_sub,
+        features = c("CD36", "PPARG"),
+        split.by = "group",
+        nrow = 1
+    ) +
+        theme_minimal(base_size = 14) +
+        labs(
+            title = "CD36, PPARG expression in TREM2_LAM",
+            x = "Gene",
+            y = "Expression"
+        ) +
+        theme(
+            plot.title = element_text(hjust = 0.5),
+            legend.position = "top",
+            plot.background = element_rect(fill = "white")
+        )
+    ggsave("results/109.paper/Fig2/TREM2_LAM_violin.png", p, width = 10, height = 10)
+    
+    # Add comparison between APOE_LAM and other myeloid cells
+    # Create a new column to identify APOE_LAM vs other myeloid cells
+    sc_mye$comparison_group <- ifelse(sc_mye$cell_type_dtl == "APOE_LAM", 
+                                     "APOE_LAM", 
+                                     "Other Myeloid")
+    
+    # Plot violin plots for ABCA8 and RORA
+    p2 <- VlnPlot2(
+        sc_mye,
+        features = c("ABCA8", "RORA"),
+        group.by = "comparison_group",
+        ncol = 1
+    ) +
+        theme_minimal(base_size = 14) +
+        labs(
+            title = "ABCA8, RORA expression in APOE_LAM vs other myeloid cells",
+            x = "Cell Type",
+            y = "Expression"
+        ) +
+        theme(
+            plot.title = element_text(hjust = 0.5),
+            legend.position = "top",
+            plot.background = element_rect(fill = "white")
+        )
+    ggsave("results/109.paper/Fig2/APOE_LAM_vs_others_violin.png", p2, width = 10, height = 10)
+    "results/109.paper/Fig2/TREM2_LAM_violin.png"
+}
 paper_myeloid_GSEA <- function(sc_mye) {
     # Create directory for results
     dir.create("results/109.paper/Fig2", showWarnings = FALSE)
@@ -1035,32 +1067,34 @@ paper_hormone_receptor_expression <- function(sc_final) {
 
     # Calculate the percentage of cells expressing each receptor by cell type using magic imputation
     percent_expr <- data.frame()
-    
+
     # Create a temporary copy of the Seurat object for imputation
     message("Performing MAGIC imputation for hormone receptors...")
     sc_final_imp <- sc_final
-    
+
     # Run MAGIC imputation for the receptor genes
     # Using the Rmagic package which interfaces with the Python MAGIC algorithm
     library(Rmagic)
-    
+
     # Extract counts for imputation
     expression_matrix <- GetAssayData(sc_final, assay = "RNA", slot = "data")
-    
+
     # Perform MAGIC imputation on the expression matrix (focusing on receptors to save computation)
     # This will help recover dropout events in sparse scRNA-seq data
     genes_to_impute <- c(receptors, sample(rownames(expression_matrix), 100)) # Include some random genes to improve imputation
-    imputed_matrix <- magic(expression_matrix[genes_to_impute,], genes=receptors, 
-                           knn=5, t="auto", npca=20, seed=42)
-    
+    imputed_matrix <- magic(expression_matrix[genes_to_impute, ],
+        genes = receptors,
+        knn = 5, t = "auto", npca = 20, seed = 42
+    )
+
     # For each receptor, analyze both original and imputed expression
     for (receptor in receptors) {
         # Extract expression data from the normalized RNA assay (original)
         orig_expr <- GetAssayData(sc_final, assay = "RNA", slot = "data")[receptor, ]
-        
+
         # Get imputed expression
         imputed_expr <- imputed_matrix[receptor, ]
-        
+
         # Combine with cell type information
         expr_df <- data.frame(
             cell = names(orig_expr),
@@ -1069,7 +1103,7 @@ paper_hormone_receptor_expression <- function(sc_final) {
             cell_type = sc_final$cell_type_dtl[names(orig_expr)],
             group = sc_final$group[names(orig_expr)]
         )
-        
+
         # Calculate percentage using both original and imputed values
         pct_result <- expr_df %>%
             group_by(cell_type, group) %>%
@@ -1087,7 +1121,7 @@ paper_hormone_receptor_expression <- function(sc_final) {
             ) %>%
             ungroup() %>%
             mutate(receptor = receptor)
-        
+
         percent_expr <- bind_rows(percent_expr, pct_result) %>%
             arrange(receptor, desc(imputed_percent_expressing))
     }

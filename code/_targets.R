@@ -99,6 +99,7 @@ list(
     tar_target(paper_myeloid_GSEA_path, paper_myeloid_GSEA(sc_mye), format = "file"),
     tar_target(paper_tcell_exhaustion_path, paper_tcell_exhaustion(sc_tcell), format = "file"),
     tar_target(paper_tcell_fate_DEG_path, paper_tcell_fate_DEG(sc_tcell), format = "file"),
+    tar_target(paper_TREM2_LAM_violin_path, paper_TREM2_LAM_violin(sc_mye), format = "file"),
     
     # re cluster
     tar_target(cell_types, unique(sc_final_2$cell_type_dtl)),
