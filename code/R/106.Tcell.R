@@ -63,98 +63,6 @@ sub_cluster_tcell <- function(sc_final) {
         combined = sc_int
     )
 }
-TCellAnnotation_CellTypist <- function(sc_tcell_clust_list) {
-    # Create directory for results
-    dir.create("results/108.Tcell/celltypist", showWarnings = FALSE, recursive = TRUE)
-
-    # Extract normal and tumor objects
-    sc_tcell_clust_normal <- sc_tcell_clust_list$normal
-    sc_tcell_clust_tumor <- sc_tcell_clust_list$tumor
-
-    # Define function to run celltypist
-    run_celltypist <- function(seurat_obj, output_prefix) {
-        # Convert to AnnData
-        adata_path <- paste0("results/108.Tcell/celltypist/", output_prefix, "_data.h5ad")
-        as.anndata(seurat_obj,
-            file_path = dirname(adata_path),
-            file_name = basename(adata_path),
-            main_layer = "counts",
-            other_layers = c("data")
-        )
-
-        # Run celltypist using reticulate
-        reticulate::use_condaenv("r-reticulate", required = TRUE)
-        celltypist <- reticulate::import("celltypist")
-
-        # Load the model
-        model <- celltypist$models$Model$load(model = "Immune_All_Low.pkl")
-
-        # Run prediction
-        adata <- reticulate::import("anndata")$read_h5ad(adata_path)
-        predictions <- celltypist$annotate(adata, model = model, majority_voting = TRUE)
-
-        # Extract predictions
-        pred_df <- reticulate::py_to_r(predictions$predicted_labels)
-        pred_df <- as.data.frame(pred_df)
-
-        # Save predictions
-        write_csv(pred_df, paste0("results/108.Tcell/celltypist/", output_prefix, "_predictions.csv"))
-
-        # Add annotations to Seurat object
-        seurat_obj$celltypist_celltype <- pred_df$majority_voting[match(colnames(seurat_obj), rownames(pred_df))]
-
-        # Create UMAP plot with celltypist annotations
-        p <- DimPlot2(seurat_obj,
-            reduction = "umap_integrated",
-            group.by = "celltypist_celltype",
-            label = TRUE,
-            label.size = 3
-        ) +
-            ggtitle(paste0(output_prefix, " - CellTypist Annotations")) +
-            theme(plot.background = element_rect(fill = "white"))
-
-        ggsave(paste0("results/108.Tcell/celltypist/", output_prefix, "_umap.png"), p, width = 12, height = 10)
-
-        return(seurat_obj)
-    }
-
-    # Run celltypist on normal and tumor data
-    sc_tcell_clust_normal <- run_celltypist(sc_tcell_clust_normal, "normal")
-    sc_tcell_clust_tumor <- run_celltypist(sc_tcell_clust_tumor, "tumor")
-
-    # Compare celltypist annotations with immune_subcluster
-    compare_annotations <- function(seurat_obj, output_prefix) {
-        comparison <- table(
-            CellTypist = seurat_obj$celltypist_celltype,
-            Cluster = seurat_obj$immune_subcluster
-        )
-
-        # Save comparison table
-        write.csv(
-            comparison,
-            paste0("results/108.Tcell/celltypist/", output_prefix, "_comparison.csv")
-        )
-
-        # Create heatmap
-        pheatmap::pheatmap(
-            log1p(comparison),
-            display_numbers = TRUE,
-            filename = paste0("results/108.Tcell/celltypist/", output_prefix, "_comparison_heatmap.png"),
-            width = 12,
-            height = 10
-        )
-    }
-
-    compare_annotations(sc_tcell_clust_normal, "normal")
-    compare_annotations(sc_tcell_clust_tumor, "tumor")
-
-    # Return updated list
-    list(
-        normal = sc_tcell_clust_normal,
-        tumor = sc_tcell_clust_tumor,
-        combined = sc_tcell_clust_list$combined
-    )
-}
 Tcell_annotation_analysis <- function(sc_tcell_clust_list, sc_final) {
     sc_tcell_clust_normal <- sc_tcell_clust_list$normal
     sc_tcell_clust_tumor <- sc_tcell_clust_list$tumor
@@ -838,10 +746,16 @@ Tcell_annotate <- function(sc_tcell_clust_list, sc_final) {
         "gdT_2" = c("TRDV2"),
         "gdT_constant" = c("TRGC1", "TRGC2", "TRDC")
     )
+    sc_tcell_clust <- sc_tcell_clust %>%
+        mutate(cell_type_dtl_DN = case_when(
+            grepl("CD4", cell_type_dtl) ~ "CD4_Tcell",
+            grepl("CD8", cell_type_dtl) ~ "CD8_Tcell",
+            TRUE ~ cell_type_dtl
+        ))
     toplot_DN <- CalcStats(
         sc_tcell_clust,
         features = markers %>% unlist(),
-        method = "zscore", order = "value", group.by = "cell_type_dtl"
+        method = "zscore", order = "value", group.by = "cell_type_dtl_DN"
     )
     gene_groups_DN <- rep(names(markers), lengths(markers)) %>%
         setNames(markers %>% unlist()) %>%
@@ -853,7 +767,7 @@ Tcell_annotate <- function(sc_tcell_clust_list, sc_final) {
     ggsave("results/108.Tcell/tcell_annotated_DN_heatmap.png", p3, width = 15, height = 8)
     p <- DotPlot2(sc_tcell_clust,
         features = markers,
-        group.by = "cell_type_dtl",
+        group.by = "cell_type_dtl_DN",
         split.by = "group",
         show_grid = FALSE
     ) +
@@ -1504,13 +1418,13 @@ run_tcell_trajectory <- function(sc_tcell) {
     # Calculate pseudotime
     seu <- Palantir.Pseudotime(seu,
         start_cell = start_cell, conda_env = "base", n_jobs = 10
-        # terminal_states = c("Th22_fate" = fate1_cell, "Tex_fate" = fate2_cell)
+        # terminal_states = c("Th22_fate" = fate1_cell, "Th1_Th17_fate" = fate2_cell)
     )
 
     # Get pseudotime data
     ps <- seu@misc$Palantir$Pseudotime
     ps <- ps[, -4]
-    colnames(ps)[3:4] <- c("Tex_fate", "Th22_fate")
+    colnames(ps)[3:4] <- c("Th1_Th17_fate", "Th22_fate")
     seu@meta.data[, colnames(ps)] <- ps
 
     # Plot pseudotime and entropy
@@ -1629,10 +1543,10 @@ run_tcell_trajectory <- function(sc_tcell) {
         seu,
         features = existing_genes,
         pseudotime.data = ps,
-        lineage = "Tex_fate",
+        lineage = "Th1_Th17_fate",
         conda_env = "base"
     )
-    ggsave("results/108.Tcell/trajectory/exhaustion_heatmap_Tex_fate.png",
+    ggsave("results/108.Tcell/trajectory/exhaustion_heatmap_Th1_Th17_fate.png",
         p_exh_Tex,
         width = 10, height = 6
     )
@@ -1680,4 +1594,354 @@ run_tcell_trajectory <- function(sc_tcell) {
     }
 
     return(sc_tcell)
+}
+
+run_tcell_trajectory_sep <- function(sc_tcell) {
+    dir.create("results/108.Tcell/trajectory", showWarnings = FALSE, recursive = TRUE)
+    tar_load(sc_tcell)
+    library(reticulate)
+    reticulate::use_virtualenv("./scveloenv")
+    library(SeuratExtend)
+    library(tidyseurat)
+    sc_tcell <- sc_tcell %>% filter(group == "tumor")
+    
+    # Split into CD4 and CD8 subsets
+    sc_cd4 <- sc_tcell %>% filter(grepl("^CD4", cell_type_dtl))
+    sc_cd8 <- sc_tcell %>% filter(grepl("^CD8", cell_type_dtl))
+    
+    # Create directories
+    dir.create("data/108.Tcell/trajectory/CD4", showWarnings = FALSE, recursive = TRUE)
+    dir.create("data/108.Tcell/trajectory/CD8", showWarnings = FALSE, recursive = TRUE)
+    dir.create("results/108.Tcell/trajectory/CD4", showWarnings = FALSE, recursive = TRUE)
+    dir.create("results/108.Tcell/trajectory/CD8", showWarnings = FALSE, recursive = TRUE)
+    
+    ###################
+    # CD4 T CELL ANALYSIS
+    ###################
+    
+    # 1. scVelo Analysis for CD4 T cells
+    Seu2Adata(sc_cd4, save.adata = "data/108.Tcell/trajectory/CD4/cd4.h5ad", conda_env = "base")
+    seu_cd4 <- scVelo.SeuratToAnndata(
+        sc_cd4,
+        filename = "data/108.Tcell/trajectory/CD4/cd4.h5ad",
+        velocyto.loompath = "data/103.self_workflow/velocyto_combined.loom",
+        prefix = "",
+        postfix = "",
+        remove_duplicates = TRUE,
+        conda_env = "base"
+    )
+
+    # Generate velocity plots for CD4
+    scVelo.Plot(
+        color = "cell_type_dtl",
+        basis = "umap_tcell_cell_embeddings",
+        save = "results/108.Tcell/trajectory/CD4/velocity_umap.png",
+        figsize = c(7, 6),
+        conda_env = "base"
+    )
+    
+    # 2. Palantir Analysis for CD4
+    set.seed(42)
+    seu_cd4 <- Palantir.RunDM(seu_cd4,
+        reduction = "scvi",
+        conda_env = "base",
+        n_components = 30
+    )
+    
+    p <- DimPlot(seu_cd4, reduction = "ms", group.by = "cell_type_dtl", label = TRUE, repel = TRUE) +
+        theme(plot.background = element_rect(fill = "white"))
+    ggsave("results/108.Tcell/trajectory/CD4/plantir_dm_initial.png", p, width = 7, height = 6)
+    
+    # Manual cell selection for outlier removal (need to run interactively)
+    # cells_to_remove_cd4 <- CellSelector(p)
+    # seu_cd4 <- subset(seu_cd4, cells = setdiff(colnames(seu_cd4), cells_to_remove_cd4))
+    
+    p <- DimPlot2(seu_cd4, reduction = "ms", group.by = "cell_type_dtl", label = TRUE, repel = TRUE) +
+        theme(plot.background = element_rect(fill = "white"))
+    ggsave("results/108.Tcell/trajectory/CD4/plantir_dm.png", p, width = 7, height = 6)
+    
+    # Update adata with selected cells
+    cells_cd4 <- colnames(seu_cd4)
+    py_run_string(sprintf("adata = adata[adata.obs.index.isin(%s)]", 
+                          paste0("[", paste0("'", cells_cd4, "'", collapse = ","), "]")))
+    
+    # Add ms dimension reduction to AnnData object
+    adata.AddDR(seu_cd4, dr = "ms", scv.graph = FALSE, conda_env = "base")
+    
+    p <- DimPlot(seu_cd4, reduction = "ms", group.by = "cell_type_dtl", label = TRUE, repel = TRUE) +
+        theme(plot.background = element_rect(fill = "white"))
+    # start_cell <- CellSelector(p)
+    # Select start cell (naive CD4 T cells)
+    start_cell_cd4 <- c("T4_CELL2070_N2", "T4_CELL2591_N4", "T4_CELL22663_N1", "T4_CELL23527_N1")  # Should be CD4_Tn cells
+    
+    # Calculate pseudotime for CD4
+    seu_cd4 <- Palantir.Pseudotime(seu_cd4,
+        start_cell = start_cell_cd4, 
+        conda_env = "base", 
+        n_jobs = 10
+    )
+    
+    # Get pseudotime data
+    ps_cd4 <- seu_cd4@misc$Palantir$Pseudotime
+    colnames(ps_cd4)[3:4] <- c("Th1_Th17_fate", "Th22_fate")
+    seu_cd4@meta.data[, colnames(ps_cd4)] <- ps_cd4
+    
+    # Plot pseudotime and entropy for CD4
+    p1 <- DimPlot2(seu_cd4,
+        features = colnames(ps_cd4),
+        reduction = "ms",
+        cols = list(Entropy = "D"),
+        theme = NoAxes()
+    ) + theme(plot.background = element_rect(fill = "white"))
+    ggsave("results/108.Tcell/trajectory/CD4/palantir_pseudotime.png", p1, width = 15, height = 12)
+    
+    # 4. CellRank Analysis for CD4
+    adata.AddMetadata(seu_cd4, col = colnames(ps_cd4), conda_env = "base")
+    Cellrank.Compute(time_key = "Pseudotime", conda_env = "base")
+    Cellrank.Plot(
+        color = "cell_type_dtl",
+        basis = "ms",
+        save = "results/108.Tcell/trajectory/CD4/cellrank_ms.png",
+        conda_env = "base"
+    )
+    
+    # 5. Gene Expression Dynamics for CD4
+    # Define gene sets
+    core_exhaustion_genes <- c(
+        "PDCD1", # PD-1
+        "HAVCR2", # TIM-3
+        "LAG3", # Lymphocyte activation gene 3
+        "TIGIT" # T cell immunoreceptor with Ig and ITIM domains
+    )
+    
+    th22_related_genes <- list(
+        # Transcription Factors
+        "TF" = c(
+            "AHR", # Primary TF for Th22 development
+            "TBX21", # T-bet, involved in Th22 development
+            "STAT3", # Main signaling mediator for Th22 function
+            "HES1", # Downstream target of NOTCH signaling that promotes Th22 differentiation
+            "SPI1" # PU.1, found infiltrating in cervical cancer samples
+        ),
+        
+        # Surface Markers and Receptors
+        "Receptors" = c(
+            "CCR4", # Characteristic chemokine receptor on Th22 cells
+            "CCR6", # Chemokine receptor for Th22 cell migration to tumor microenvironment
+            "CCR10", # Characteristic chemokine receptor on Th22 cells
+            "IL22RA1", # Part of the IL-22 receptor complex
+            "IL22RA2" # Soluble form of IL-22 receptor
+        ),
+        
+        # Cytokines Produced
+        "Cytokines_Produced" = c(
+            "IL22", # Primary cytokine produced by Th22 cells
+            "TNF", # Also secreted by Th22 cells
+            "IL13" # Also secreted by Th22 cells
+        ),
+        
+        # Cytokines Inducing Th22 Differentiation
+        "Cytokines_Inducing" = c(
+            "TNF", # Required for Th22 differentiation
+            "IL6", # Required for Th22 differentiation
+            "IL12A", # Involved in Th22 development
+            "IL12B", # Involved in Th22 development
+            "IL21", # Involved in Th22 development
+            "IL23A" # Involved in Th22 development
+        ),
+        
+        # Signaling Pathway Genes
+        "Signaling" = c(
+            "JAK1", # Primary kinase in IL-22 signaling pathway
+            "STAT3", # Master regulator of Th22 function and primary IL-22 signal transducer
+            "MAPK1", # ERK2, critical for IL-22-induced proliferation
+            "NOTCH1", # Key for T cell differentiation toward Th22 fate
+            "HES1", # NOTCH target essential for Th22 differentiation
+            "DOT1L", # Epigenetic regulator specifically increased by IL-22
+            "AKT1" # Important for IL-22-induced cell survival pathways
+        )
+    )
+    
+    # Check if genes exist in the dataset
+    existing_exhaustion_genes <- intersect(core_exhaustion_genes, rownames(seu_cd4))
+    
+    # Generate heatmaps and trend curves for CD4
+    p_exh_Tex_cd4 <- GeneTrendHeatmap.Palantir(
+        seu_cd4,
+        features = existing_exhaustion_genes,
+        pseudotime.data = ps_cd4,
+        lineage = "Th1_Th17_fate",
+        conda_env = "base"
+    )
+    ggsave("results/108.Tcell/trajectory/CD4/exhaustion_heatmap_Th1_Th17_fate.png",
+           p_exh_Tex_cd4, width = 10, height = 6)
+    
+    p_exh_Th22_cd4 <- GeneTrendHeatmap.Palantir(
+        seu_cd4,
+        features = existing_exhaustion_genes,
+        pseudotime.data = ps_cd4,
+        lineage = "Th22_fate",
+        conda_env = "base"
+    )
+    ggsave("results/108.Tcell/trajectory/CD4/exhaustion_heatmap_Th22_fate.png",
+           p_exh_Th22_cd4, width = 10, height = 6)
+    
+    p_exh_trends_cd4 <- GeneTrendCurve.Palantir(
+        seu_cd4,
+        pseudotime.data = ps_cd4,
+        features = existing_exhaustion_genes,
+        point = FALSE,
+        se = TRUE,
+        conda_env = "base"
+    )
+    ggsave("results/108.Tcell/trajectory/CD4/exhaustion_genes_trends.png",
+           p_exh_trends_cd4, width = 12, height = 8)
+    
+    # Generate trend heatmaps for each gene set on both fates
+    for (geneset in names(th22_related_genes)) {
+        genes_to_use <- intersect(th22_related_genes[[geneset]], rownames(seu_cd4))
+        if (length(genes_to_use) > 0) {
+            p <- GeneTrendHeatmap.Palantir(
+                seu_cd4,
+                features = genes_to_use,
+                pseudotime.data = ps_cd4,
+                lineage = "Th22_fate",
+                conda_env = "base"
+            )
+            ggsave(paste0("results/108.Tcell/trajectory/CD4/", geneset, "_heatmap_Th22_fate.png"),
+                   p, width = 10, height = 6)
+        }
+    }
+    
+    ###################
+    # CD8 T CELL ANALYSIS
+    ###################
+    
+    # 1. scVelo Analysis for CD8 T cells
+    Seu2Adata(sc_cd8, save.adata = "data/108.Tcell/trajectory/CD8/cd8.h5ad", conda_env = "base")
+    seu_cd8 <- scVelo.SeuratToAnndata(
+        sc_cd8,
+        filename = "data/108.Tcell/trajectory/CD8/cd8.h5ad",
+        velocyto.loompath = "data/103.self_workflow/velocyto_combined.loom",
+        prefix = "",
+        postfix = "",
+        remove_duplicates = TRUE,
+        conda_env = "base"
+    )
+    
+    # Generate velocity plots for CD8
+    scVelo.Plot(
+        color = "cell_type_dtl",
+        basis = "umap_tcell_cell_embeddings",
+        save = "results/108.Tcell/trajectory/CD8/velocity_umap.png",
+        figsize = c(7, 6),
+        conda_env = "base"
+    )
+    
+    # 2. Palantir Analysis for CD8
+    set.seed(42)
+    seu_cd8 <- Palantir.RunDM(seu_cd8,
+        reduction = "scvi",
+        conda_env = "base",
+        n_components = 30
+    )
+    
+    p <- DimPlot2(seu_cd8, reduction = "ms", group.by = "cell_type_dtl", label = TRUE, repel = TRUE) +
+        theme(plot.background = element_rect(fill = "white"))
+    ggsave("results/108.Tcell/trajectory/CD8/plantir_dm.png", p, width = 7, height = 6)
+    
+    # Update adata with selected cells
+    cells_cd8 <- colnames(seu_cd8)
+    py_run_string(sprintf("adata = adata[adata.obs.index.isin(%s)]", 
+                          paste0("[", paste0("'", cells_cd8, "'", collapse = ","), "]")))
+    
+    # Add ms dimension reduction to AnnData object
+    adata.AddDR(seu_cd8, dr = "ms", scv.graph = FALSE, conda_env = "base")
+    
+    p <- DimPlot(seu_cd8, reduction = "ms", group.by = "cell_type_dtl", label = TRUE, repel = TRUE) +
+        theme(plot.background = element_rect(fill = "white"))
+    # start_cell <- CellSelector(p)
+    # fate_Temra <- CellSelector(p)
+    # fate_Tex <- CellSelector(p)
+    # Ideally select cells from CD8_Tn subtype
+    start_cell_cd8 <- c("T4_CELL3197_N4", "T4_CELL12544_N2", "T4_CELL13422_N2")
+    fate_Temra <- c("T4_CELL5033_N2")
+    fate_Tex <- c("T4_CELL56860_N1")
+    
+    # Calculate pseudotime for CD8
+    seu_cd8 <- Palantir.Pseudotime(seu_cd8,
+        start_cell = start_cell_cd8, 
+        conda_env = "base", 
+        n_jobs = 10,
+        terminal_states = c("Temra_fate" = fate_Temra, "Tex_fate" = fate_Tex)
+    )
+    
+    # Get pseudotime data
+    ps_cd8 <- seu_cd8@misc$Palantir$Pseudotime
+    seu_cd8@meta.data[, colnames(ps_cd8)] <- ps_cd8
+    
+    # Plot pseudotime and entropy for CD8
+    p1 <- DimPlot2(seu_cd8,
+        features = colnames(ps_cd8),
+        reduction = "ms",
+        cols = list(Entropy = "D"),
+        theme = NoAxes()
+    ) + theme(plot.background = element_rect(fill = "white"))
+    ggsave("results/108.Tcell/trajectory/CD8/palantir_pseudotime.png", p1, width = 15, height = 12)
+    
+    # 4. CellRank Analysis for CD8
+    adata.AddMetadata(seu_cd8, col = colnames(ps_cd8), conda_env = "base")
+    Cellrank.Compute(time_key = "Pseudotime", conda_env = "base")
+    Cellrank.Plot(
+        color = "cell_type_dtl",
+        basis = "ms",
+        save = "results/108.Tcell/trajectory/CD8/cellrank_ms.png",
+        conda_env = "base"
+    )
+    
+    # 5. Gene Expression Dynamics for CD8
+    # CD8-specific gene set
+    cd8_markers <- list(
+        "Cytotoxicity" = c("GZMA", "GZMB", "GZMH", "PRF1", "GNLY"),
+        "Activation" = c("ICOS", "CD69", "HLA-DRA"),
+        "Exhaustion" = core_exhaustion_genes,
+        "Stemness" = c("TCF7", "LEF1", "CCR7", "SELL"),
+        "EffectorFunction" = c("IFNG", "TNF", "FASLG", "LAMP1"),
+        "TissueResidency" = c("ITGAE", "CD69", "CXCR6", "ITGA1")
+    )
+    
+    # Check for existence of genes
+    for (category in names(cd8_markers)) {
+        genes_to_use <- intersect(cd8_markers[[category]], rownames(seu_cd8))
+        if (length(genes_to_use) > 0) {
+            # Generate trend curves for major terminal states
+            for (lineage in colnames(ps_cd8)[3:ncol(ps_cd8)]) {
+                p <- GeneTrendHeatmap.Palantir(
+                    seu_cd8,
+                    features = genes_to_use,
+                    pseudotime.data = ps_cd8,
+                    lineage = lineage,
+                    conda_env = "base"
+                )
+                ggsave(paste0("results/108.Tcell/trajectory/CD8/", category, "_heatmap_", lineage, ".png"),
+                       p, width = 10, height = 6)
+            }
+        }
+    }
+    # Draw exhaustion marker trend curve for CD8
+    existing_exhaustion_genes_cd8 <- intersect(core_exhaustion_genes, rownames(seu_cd8))
+    if (length(existing_exhaustion_genes_cd8) > 0) {
+        p_exh_trends_cd8 <- GeneTrendCurve.Palantir(
+            seu_cd8,
+            pseudotime.data = ps_cd8,
+            features = existing_exhaustion_genes_cd8,
+            point = FALSE,
+            se = TRUE,
+            conda_env = "base"
+        )
+        ggsave("results/108.Tcell/trajectory/CD8/exhaustion_genes_trends.png",
+               p_exh_trends_cd8, width = 12, height = 8)
+    }
+    # Return the trajectory objects
+    return(list(CD4 = seu_cd4, CD8 = seu_cd8))
 }
