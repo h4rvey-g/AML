@@ -241,7 +241,7 @@ plot_fib_volcano <- function(sc_adipo) {
         subtitle = "Differential Expression (DESeq2)",
         pCutoff = 0.05, # Adjust p-value cutoff as needed
         FCcutoff = 1, # Adjust logFC cutoff as needed
-        pointSize = 2.0,
+        pointSize = ifelse(deg_results$gene %in% genes_to_label, 4.0, 2.0), # Make labeled points bigger
         labSize = 4.0,
         colAlpha = 0.5,
         legendPosition = "none", # Remove legend
@@ -249,13 +249,12 @@ plot_fib_volcano <- function(sc_adipo) {
         widthConnectors = 0.5,
         colConnectors = "grey50",
         boxedLabels = TRUE, # Make labels boxed
-        # Define custom colors for labeled points (e.g., highlight in orange)
-        # This overrides the default coloring for the selected labels
+        # Define custom colors: non-significant, significant FC, significant p, significant both
+        # Make non-labeled points grey, labeled points orange
         colCustom = data.frame(
             key = deg_results$gene,
-            color = ifelse(deg_results$gene %in% genes_to_label, 'orange', 'black')
+            color = ifelse(deg_results$gene %in% genes_to_label, 'orange', 'grey30')
         ) %>% tibble::deframe()
-        # Removed the redundant 'col' argument here
     ) + theme(plot.background = element_rect(fill = "white")) # Ensure white background
 
     # Save the plot
