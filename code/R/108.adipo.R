@@ -244,17 +244,27 @@ plot_fib_volcano <- function(sc_adipo) {
         pointSize = 2.0,
         labSize = 4.0,
         colAlpha = 0.5,
-        legendPosition = "right",
+        legendPosition = "none", # Remove legend
         drawConnectors = TRUE,
         widthConnectors = 0.5,
         colConnectors = "grey50",
-        # Add custom colors if desired
-        # col = c('grey30', 'forestgreen', 'royalblue', 'red2'),
-        # legendLabSize = 12,
-        # legendIconSize = 4.0,
-        # border = 'full',
-        # borderWidth = 1.5,
-        # borderColour = 'black'
+        boxedLabels = TRUE, # Make labels boxed
+        # Define custom colors: default, significant FC, significant p, significant both
+        col = c('grey30', 'forestgreen', 'royalblue', 'red2'),
+        # Define custom colors for labeled points (e.g., highlight in orange)
+        colCustom = ifelse(deg_results$gene %in% genes_to_label, 'orange', 'black'),
+        # You might need to adjust the col argument or use a different approach
+        # if colCustom doesn't override the main color scheme as expected.
+        # A common approach is to manually create the plot with ggplot2
+        # for full control over colors and labeling.
+        # For now, let's try to use colCustom with the default colors.
+        # If the labeled points don't appear orange, we might need a different strategy.
+        colCustom = data.frame(
+            key = deg_results$gene,
+            color = ifelse(deg_results$gene %in% genes_to_label, 'orange', 'black')
+        ) %>% tibble::deframe(),
+        # Ensure the default colors are still applied to non-labeled points
+        col = c('grey30', 'forestgreen', 'royalblue', 'red2')
     ) + theme(plot.background = element_rect(fill = "white")) # Ensure white background
 
     # Save the plot
