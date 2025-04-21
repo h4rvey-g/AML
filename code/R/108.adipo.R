@@ -231,13 +231,6 @@ plot_fib_volcano <- function(sc_adipo) {
         return(NULL)
     }
 
-    # Use EnhancedVolcano to create the plot
-    # Need to install EnhancedVolcano if not already installed:
-    # if (!requireNamespace("BiocManager", quietly = TRUE))
-    #     install.packages("BiocManager")
-    # BiocManager::install("EnhancedVolcano")
-    library(EnhancedVolcano)
-
     p_volcano_fib <- EnhancedVolcano(
         deg_results,
         lab = deg_results$gene,
