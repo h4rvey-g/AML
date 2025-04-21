@@ -211,32 +211,66 @@ plot_fib_volcano <- function(sc_adipo) {
         "LSAMP", "IGFBP6"
     )
 
-    # Set identities for comparison
-    sc_adipo$cell_type_group <- paste(sc_adipo$cell_type_dtl, sc_adipo$group, sep = "_")
-    Idents(sc_adipo) <- "cell_type_group"
-    ident1_fib <- "Fib_tumor"
-    ident2_fib <- "Fib_normal"
+    # Path to the pre-calculated DEG results
+    deg_file_path <- "/workspaces/AML/results/103.DEG/tumor_vs_normal/DEG_Fib_DESeq2.tsv"
 
-    # Check if both idents exist before plotting
-    if (ident1_fib %in% Idents(sc_adipo) && ident2_fib %in% Idents(sc_adipo)) {
-        # Generate the Volcano plot
-        p_volcano_fib <- VolcanoPlot(
-            sc_adipo,
-            ident.1 = ident1_fib,
-            ident.2 = ident2_fib,
-            features = genes_to_label, # Attempt to label these specific genes
-            # top.n = 0, # Optionally disable automatic top.n labeling if features overrides
-            title = "Volcano Plot: Fib (Tumor vs Normal)"
-        ) + theme(plot.background = element_rect(fill = "white")) # Ensure white background
-
-        # Save the plot
-        ggsave("results/110.adipo/DEG/fib_volcano_plot.png", p_volcano_fib, width = 8, height = 7)
-
-        message("Fib volcano plot saved to results/110.adipo/DEG/fib_volcano_plot.png")
-
-    } else {
-        warning("Could not generate Volcano plot for Fib: required idents not found.")
+    # Check if the DEG file exists
+    if (!file.exists(deg_file_path)) {
+        warning(paste("DEG file not found:", deg_file_path))
+        message("Skipping Volcano plot generation for Fib.")
+        return(NULL)
     }
+
+    # Read the DEG results
+    deg_results <- read_tsv(deg_file_path)
+
+    # Ensure required columns are present
+    if (!all(c("gene", "avg_log2FC", "p_val_adj") %in% colnames(deg_results))) {
+        warning(paste("Required columns (gene, avg_log2FC, p_val_adj) not found in", deg_file_path))
+        message("Skipping Volcano plot generation for Fib.")
+        return(NULL)
+    }
+
+    # Use EnhancedVolcano to create the plot
+    # Need to install EnhancedVolcano if not already installed:
+    # if (!requireNamespace("BiocManager", quietly = TRUE))
+    #     install.packages("BiocManager")
+    # BiocManager::install("EnhancedVolcano")
+    library(EnhancedVolcano)
+
+    p_volcano_fib <- EnhancedVolcano(
+        deg_results,
+        lab = deg_results$gene,
+        x = "avg_log2FC",
+        y = "p_val_adj",
+        selectLab = genes_to_label, # Label only the specified genes
+        title = "Volcano Plot: Fib (Tumor vs Normal)",
+        subtitle = "Differential Expression (DESeq2)",
+        pCutoff = 0.05, # Adjust p-value cutoff as needed
+        FCcutoff = 0.5, # Adjust logFC cutoff as needed
+        pointSize = 2.0,
+        labSize = 4.0,
+        colAlpha = 0.5,
+        legendPosition = "right",
+        drawConnectors = TRUE,
+        widthConnectors = 0.5,
+        colConnectors = "grey50",
+        # Add custom colors if desired
+        # col = c('grey30', 'forestgreen', 'royalblue', 'red2'),
+        # legendLabSize = 12,
+        # legendIconSize = 4.0,
+        # border = 'full',
+        # borderWidth = 1.5,
+        # borderColour = 'black'
+    ) + theme(plot.background = element_rect(fill = "white")) # Ensure white background
+
+    # Save the plot
+    ggsave("results/110.adipo/DEG/fib_volcano_plot.png", p_volcano_fib, width = 8, height = 7)
+
+    message("Fib volcano plot saved to results/110.adipo/DEG/fib_volcano_plot.png")
+
+    # Return the path to the saved plot
+    return("results/110.adipo/DEG/fib_volcano_plot.png")
 }
 
 
