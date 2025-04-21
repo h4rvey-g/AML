@@ -98,6 +98,46 @@ adipo_DEG_plot <- function(sc_adipo) {
     deg_psc <- get_cell_type_degs("PSC")
     deg_fib <- get_cell_type_degs("Fib")
 
+    # --- Add Volcano Plot for Fib ---
+    # Define genes to label
+    genes_to_label <- c(
+        # Upregulated
+        "PPARG", "LPL", "CXCL12", "VEGFC", "VCAN", "ADAMTS17", "ADAMTS2",
+        # Downregulated
+        "LSAMP", "IGFBP6"
+    )
+
+    # Ensure the idents are set correctly for VolcanoPlot if needed,
+    # although FindMarkers already used them. Re-setting just in case.
+    Idents(sc_adipo) <- "cell_type_group"
+    ident1_fib <- "Fib_tumor"
+    ident2_fib <- "Fib_normal"
+
+    # Check if both idents exist before plotting
+    if (ident1_fib %in% Idents(sc_adipo) && ident2_fib %in% Idents(sc_adipo)) {
+        # Assuming VolcanoPlot can label specific features passed to 'features'
+        # Or it might label top.n AND the specified features if they pass thresholds.
+        # If direct labeling isn't supported, manual labeling might be needed later.
+        p_volcano_fib <- VolcanoPlot(
+            sc_adipo,
+            ident.1 = ident1_fib,
+            ident.2 = ident2_fib,
+            features = genes_to_label, # Attempt to label these specific genes
+            # top.n = 0, # Optionally disable automatic top.n labeling if features overrides
+            title = "Volcano Plot: Fib (Tumor vs Normal)"
+        ) + theme(plot.background = element_rect(fill = "white")) # Ensure white background
+
+        # Save the plot
+        ggsave("results/110.adipo/DEG/fib_volcano_plot.png", p_volcano_fib, width = 8, height = 7)
+
+        message("Fib volcano plot saved to results/110.adipo/DEG/fib_volcano_plot.png")
+
+    } else {
+        warning("Could not generate Volcano plot for Fib: required idents not found.")
+    }
+    # --- End Volcano Plot ---
+
+
     # Combine DEGs from both cell types
     all_degs <- bind_rows(deg_psc, deg_fib)
 
