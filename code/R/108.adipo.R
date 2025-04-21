@@ -240,7 +240,7 @@ plot_fib_volcano <- function(sc_adipo) {
         title = "Volcano Plot: Fib (Tumor vs Normal)",
         subtitle = "Differential Expression (DESeq2)",
         pCutoff = 0.05, # Adjust p-value cutoff as needed
-        FCcutoff = 0.5, # Adjust logFC cutoff as needed
+        FCcutoff = 1, # Adjust logFC cutoff as needed
         pointSize = 2.0,
         labSize = 4.0,
         colAlpha = 0.5,
