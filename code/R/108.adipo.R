@@ -288,7 +288,7 @@ run_adipo_trajectory <- function(sc_adipo) {
     tar_load(sc_adipo)
     reticulate::use_virtualenv("./scveloenv")
     library(reticulate)
-    py_run_string("")
+    py_config()
     library(SeuratExtend)
     library(tidyseurat)
     # filter for plasticity cells only (Fib, PSC, adipo)
@@ -356,21 +356,21 @@ run_adipo_trajectory <- function(sc_adipo) {
     p <- DimPlot(seu, reduction = "ms", group.by = "cell_type_group", label = TRUE, repel = TRUE) +
         theme(plot.background = element_rect(fill = "white"))
     start_cell <- CellSelector(p)
-    fate1_cell <- CellSelector(p)
-    fate2_cell <- CellSelector(p)
-    fate1_cell <- fate1_cell[1]
-    fate2_cell <- fate2_cell[2]
+    # fate1_cell <- CellSelector(p)
+    # fate2_cell <- CellSelector(p)
+    # fate1_cell <- fate1_cell[1]
+    # fate2_cell <- fate2_cell[2]
     # start_cell <- colnames(seu)[which(seu$cell_type_dtl == "Fib")[1]]
 
     # Calculate pseudotime
     seu <- Palantir.Pseudotime(seu,
-        start_cell = start_cell, conda_env = "base",
-        terminal_states = c("fate1" = fate1_cell, "fate2" = fate2_cell)
+        start_cell = start_cell, conda_env = "base"
+        # terminal_states = c("fate1" = fate1_cell, "fate2" = fate2_cell)
     )
 
     # Get pseudotime data
     ps <- seu@misc$Palantir$Pseudotime
-    # colnames(ps)[3, 4] <- c("fate1", "fate2")
+    colnames(ps)[3:4] <- c("Adipo_fate", "Fib_fate")
     seu@meta.data[, colnames(ps)] <- ps
 
     # Plot pseudotime and entropy
@@ -388,7 +388,7 @@ run_adipo_trajectory <- function(sc_adipo) {
 
     # Run CellRank
     Cellrank.Compute(time_key = "Pseudotime", conda_env = "base")
-
+    # SeuratExtend::adata.Save("data/110.adipo/trajectory/adipo.h5ad", conda_env = "base")
     # Generate CellRank plots
     Cellrank.Plot(
         color = "cell_type_group",

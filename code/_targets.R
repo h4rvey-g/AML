@@ -16,7 +16,7 @@ tar_option_set(
     packages <- c(
         "tidyverse", "rliger", "Seurat", "reticulate", "SeuratExtend", "tidyseurat", "scCustomize", "patchwork", "tidyplots",
         "liana", "SingleCellExperiment", "scDblFinder", "foreach", "doParallel", "scLink", "sccomp", "ggalign", "escape",
-        "RColorBrewer"
+        "RColorBrewer", "EnhancedVolcano"
     ),
     controller = crew_controller_local(workers = 20, seconds_timeout = 6000),
     format = "qs",
@@ -90,6 +90,7 @@ list(
     tar_target(GSEA_Tex_TRM_path, run_GSEA_Tex_TRM(sc_tcell), format = "file"),
     tar_target(sc_adipo, cluster_adipo(sc_final)),
     tar_target(adipo_DEG_plot_path, adipo_DEG_plot(sc_adipo), format = "file"),
+    tar_target(fib_volcano_plot_path, plot_fib_volcano(sc_adipo), format = "file"),
 
     # paper plot
     tar_target(paper_final_annotation_path, paper_final_annotation(sc_final), format = "file"),
@@ -100,7 +101,7 @@ list(
     tar_target(paper_tcell_exhaustion_path, paper_tcell_exhaustion(sc_tcell), format = "file"),
     tar_target(paper_tcell_fate_DEG_path, paper_tcell_fate_DEG(sc_tcell), format = "file"),
     tar_target(paper_TREM2_LAM_violin_path, paper_TREM2_LAM_violin(sc_mye), format = "file"),
-    
+
     # re cluster
     tar_target(cell_types, unique(sc_final_2$cell_type_dtl)),
     tar_target(DEG_cluster_path, DEG_cluster(sc_final_2, cell_types), format = "file", pattern = map(cell_types)),
