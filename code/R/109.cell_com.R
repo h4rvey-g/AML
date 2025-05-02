@@ -1,4 +1,5 @@
 cell_communication <- function(sc_final, sc_mye, sc_tcell) {
+    tar_load(sc_final)
     sc_final <- sc_final %>%
         filter(group == "tumor")
     library(liana)
@@ -209,7 +210,7 @@ cell_communication <- function(sc_final, sc_mye, sc_tcell) {
             }
         )
     })
-    key_types <- c("Adipo", "Fib", "PSC", "MSC", "Endo")
+    key_types <- c("Adipo", "Fib", "TREM2_LAM", "APOE_LAM")
     p <- liana_test %>%
         liana_dotplot(
             source_groups = c(key_types),
