@@ -1,8 +1,60 @@
 paper_final_annotation <- function(sc_final) {
     dir.create("results/109.paper/Fig1", showWarnings = FALSE)
-    p <- DimPlot2(sc_final, reduction = "umap_integrated", group.by = "cell_type_dtl", label = TRUE) +
+    # Create directory for results
+    dir.create("results/109.paper/Fig1", recursive = TRUE, showWarnings = FALSE)
+
+    # Define a custom color palette for all cell types that will be used consistently
+    cell_types <- unique(sc_final$cell_type_dtl) %>% sort()
+    set.seed(42) # For reproducible color generation
+    custom_colors <- c(
+        "#dc467fcc", "#5cb248cc", "#b25ac9cc", "#b4b540cc", "#6b82d9cc", "#ce4f32cc",
+        "#49afcfcc", "#cd8f44cc", "#6f56a2cc", "#54a778cc", "#a34673cc", "#767933cc",
+        "#d489c4cc", "#c2685fcc"
+    )
+    names(custom_colors) <- cell_types
+
+    # Get the subset of cell types present in tumor and normal samples
+    tumor_cell_types <- unique((sc_final %>% filter(group == "tumor"))$cell_type_dtl)
+    normal_cell_types <- unique((sc_final %>% filter(group == "normal"))$cell_type_dtl)
+
+    # Create subset color palettes (maintaining the same colors for each cell type)
+    tumor_colors <- custom_colors[names(custom_colors) %in% tumor_cell_types]
+    normal_colors <- custom_colors[names(custom_colors) %in% normal_cell_types]
+
+    # Plot all cells with custom colors
+    p <- DimPlot2(sc_final,
+        reduction = "umap_integrated",
+        group.by = "cell_type_dtl",
+        label = TRUE,
+        cols = custom_colors,
+        repel = TRUE
+    ) +
         theme(plot.background = element_rect(fill = "white"))
-    ggsave("results/109.paper/Fig1/final_annotation.png", p, width = 7, height = 7)
+    ggsave("results/109.paper/Fig1/dimplot_all.tiff", p, width = 7, height = 7, device = "tiff", compression = "lzw")
+
+    # Plot tumor cells with the same custom colors (matching subset)
+    p_tumor <- DimPlot2(sc_final %>% filter(group == "tumor"),
+        reduction = "umap_integrated",
+        group.by = "cell_type_dtl",
+        label = TRUE,
+        cols = tumor_colors,
+        repel = TRUE
+    ) +
+        theme(plot.background = element_rect(fill = "white")) +
+        ggtitle("Tumor")
+    ggsave("results/109.paper/Fig1/dimplot_tumor.tiff", p_tumor, width = 7, height = 7, device = "tiff", compression = "lzw")
+
+    # Plot normal cells with the same custom colors (matching subset)
+    p_normal <- DimPlot2(sc_final %>% filter(group == "normal"),
+        reduction = "umap_integrated",
+        group.by = "cell_type_dtl",
+        label = TRUE,
+        cols = normal_colors,
+        repel = TRUE
+    ) +
+        theme(plot.background = element_rect(fill = "white")) +
+        ggtitle("Normal")
+    ggsave("results/109.paper/Fig1/dimplot_normal.tiff", p_normal, width = 7, height = 7, device = "tiff", compression = "lzw")
     markers <- list(
         "ZG" = c("NR5A1", "DACH1", "CYP11B2"),
         "ZG/ZF" = c("NR5A1", "NOV", "NCAM1"),
@@ -18,55 +70,8 @@ paper_final_annotation <- function(sc_final) {
         "Neural" = c("PTPRD", "RBFOX1", "HCN1", "SYT16"),
         "Plasma" = c("CD38", "SDC1", "IGHG1"),
         "LEC" = c("PDPN", "PROX1", "NR2F2")
+        # "Eryth" = c("HBB", "GYPA", "SLC4A1")
     )
-
-    p <- DotPlot2(sc_final,
-        features = markers,
-        group.by = "cell_type_dtl",
-        split.by = "group",
-        split.by.method = "color",
-        split.by.colors = c("#4DBBD5FF", "#E64B35FF"),
-        show_grid = FALSE
-    ) +
-        theme(plot.background = element_rect(fill = "white"))
-    ggsave("results/109.paper/Fig1/final_annotation_dotplot.png", p, width = 7, height = 7)
-    # Get expression stats for tumor samples
-    toplot_tumor <- CalcStats(sc_final %>% filter(group == "tumor"),
-        features = markers %>% unlist(),
-        group.by = "cell_type_dtl",
-        method = "zscore",
-        order = "value"
-    )
-
-    # Get expression stats for normal samples
-    toplot_normal <- CalcStats(sc_final %>% filter(group == "normal"),
-        features = markers %>% unlist(),
-        group.by = "cell_type_dtl",
-        method = "zscore",
-        order = "value"
-    )
-
-    # Create gene group annotations
-    gene_groups <- rep(names(markers), lengths(markers)) %>%
-        setNames(markers %>% unlist())
-
-    # For tumor plot
-    gene_groups_tumor <- gene_groups[rownames(toplot_tumor)]
-    p_tumor <- Heatmap(t(toplot_tumor),
-        lab_fill = "zscore",
-        facet_col = gene_groups_tumor
-    ) +
-        ggtitle("Tumor") +
-        theme(plot.background = element_rect(fill = "white"))
-
-    # For normal plot
-    gene_groups_normal <- gene_groups[rownames(toplot_normal)]
-    p_normal <- Heatmap(t(toplot_normal),
-        lab_fill = "zscore",
-        facet_col = gene_groups_normal
-    ) +
-        ggtitle("Normal") +
-        theme(plot.background = element_rect(fill = "white"))
 
     # Combined plot for all samples
     toplot <- CalcStats(sc_final,
@@ -76,44 +81,27 @@ paper_final_annotation <- function(sc_final) {
         order = "value"
     )
 
-    gene_groups_all <- gene_groups[rownames(toplot)]
+    gene_groups <- rep(names(markers), lengths(markers)) %>%
+        setNames(markers %>% unlist())
+    gene_groups <- gene_groups[rownames(toplot)]
     p_all <- Heatmap(t(toplot),
         lab_fill = "zscore",
-        facet_col = gene_groups_all
+        facet_col = gene_groups
     ) +
         ggtitle("All Samples") +
         theme(plot.background = element_rect(fill = "white"))
-    # Create a combined plot (vertically stacked)
-    p_combined <- p_tumor / p_normal
 
-    # Save all plots
-    ggsave("results/109.paper/Fig1/final_annotation_heatmap_tumor.png", p_tumor, width = 14, height = 5)
-    ggsave("results/109.paper/Fig1/final_annotation_heatmap_normal.png", p_normal, width = 14, height = 5)
-    ggsave("results/109.paper/Fig1/final_annotation_heatmap_combined.png", p_combined, width = 14, height = 10)
-    ggsave("results/109.paper/Fig1/final_annotation_heatmap.png", p_all, width = 14, height = 7)
+    ggsave("results/109.paper/Fig1/final_annotation_heatmap.tiff", p_all, width = 14, height = 7)
 
+    "results/109.paper/Fig1"
+}
+
+paper_cell_distribution <- function(sc_final) {
     # Create a pie chart showing distribution of cells in tumor vs normal
     cell_distribution <- sc_final %>%
         group_by(group) %>%
         summarise(cell_count = n()) %>%
         mutate(percentage = cell_count / sum(cell_count) * 100)
-
-    # Create the pie chart
-    p_pie <- ggplot(cell_distribution, aes(x = "", y = cell_count, fill = group)) +
-        geom_bar(stat = "identity", width = 1) +
-        coord_polar("y", start = 0) +
-        scale_fill_manual(values = c("normal" = "#4DBBD5FF", "tumor" = "#E64B35FF")) +
-        labs(
-            title = "Distribution of Cells by Sample Type",
-            fill = "Sample Type"
-        ) +
-        geom_text(aes(label = paste0(round(percentage, 1), "%\n(", cell_count, " cells)")),
-            position = position_stack(vjust = 0.5)
-        ) +
-        theme_void() +
-        theme(plot.background = element_rect(fill = "white"))
-
-    ggsave("results/109.paper/Fig1/cell_distribution_pie.png", p_pie, width = 6, height = 6)
 
     # Create a cell count summary by sample
     sample_distribution <- sc_final %>%
@@ -126,17 +114,188 @@ paper_final_annotation <- function(sc_final) {
 
     # Save the data as TSV
     write_tsv(sample_distribution, "results/109.paper/Fig1/sample_cell_counts.tsv")
-    # Create a bar plot for cell type distribution within tumor and normal
+
+    # Create a connected stacked bar chart for cell type distribution between tumor and normal
+    # Calculate cell type percentages for each group
     cell_type_dist <- sc_final %>%
-        group_by(group, cell_type) %>%
+        group_by(group, cell_type_dtl) %>%
         summarise(cell_count = n(), .groups = "drop") %>%
         group_by(group) %>%
         mutate(percentage = cell_count / sum(cell_count) * 100) %>%
+        arrange(group, desc(percentage)) %>%
         ungroup()
 
-    p_bar <- ggplot(cell_type_dist, aes(x = group, y = percentage, fill = cell_type)) +
+    # Define a custom color palette for all cell types that will be used consistently
+    cell_types <- unique(sc_final$cell_type_dtl) %>% sort()
+    set.seed(42) # For reproducible color generation
+    custom_colors <- c(
+        "#dc467fcc", "#5cb248cc", "#b25ac9cc", "#b4b540cc", "#6b82d9cc", "#ce4f32cc",
+        "#49afcfcc", "#cd8f44cc", "#6f56a2cc", "#54a778cc", "#a34673cc", "#767933cc",
+        "#d489c4cc", "#c2685fcc"
+    )
+    names(custom_colors) <- cell_types
+
+    # Get the subset of cell types present in tumor and normal samples
+    tumor_cell_types <- unique((sc_final %>% filter(group == "tumor"))$cell_type_dtl)
+    normal_cell_types <- unique((sc_final %>% filter(group == "normal"))$cell_type_dtl)
+
+    # Create subset color palettes (maintaining the same colors for each cell type)
+    tumor_colors <- custom_colors[names(custom_colors) %in% tumor_cell_types]
+    normal_colors <- custom_colors[names(custom_colors) %in% normal_cell_types]
+
+    # Calculate the percentage change for each cell type (tumor - normal)
+    cell_type_changes <- cell_type_dist %>%
+        select(group, cell_type_dtl, percentage) %>%
+        pivot_wider(names_from = group, values_from = percentage, values_fill = 0) %>%
+        mutate(
+            percentage_change = tumor - normal,
+            abs_change = abs(percentage_change)
+        ) %>%
+        # Order by percentage change (ascending, so largest negative change is first)
+        arrange(percentage_change)
+
+    # Create ordered factor based on percentage change
+    ordered_cell_types <- cell_type_changes$cell_type_dtl
+
+    # Process data for the connected bar chart using the new ordering
+    connector_data <- data.frame()
+
+    for (g in c("normal", "tumor")) {
+        group_data <- cell_type_dist %>%
+            filter(group == g) %>%
+            # Use the ordering based on percentage change
+            mutate(cell_type_dtl = factor(cell_type_dtl, levels = ordered_cell_types)) %>%
+            arrange(cell_type_dtl)
+
+        # Add any missing cell types with 0 percentage
+        missing_types <- setdiff(ordered_cell_types, group_data$cell_type_dtl)
+        if (length(missing_types) > 0) {
+            missing_data <- data.frame(
+                group = g,
+                cell_type_dtl = factor(missing_types, levels = ordered_cell_types),
+                cell_count = 0,
+                percentage = 0
+            )
+            group_data <- bind_rows(group_data, missing_data)
+        }
+
+        # Calculate y positions (cumulative percentages)
+        group_data <- group_data %>%
+            arrange(cell_type_dtl) %>%
+            mutate(
+                y_bottom = lag(cumsum(percentage), default = 0),
+                y_top = cumsum(percentage),
+                y_mid = (y_bottom + y_top) / 2
+            )
+
+        connector_data <- bind_rows(connector_data, group_data)
+    }
+
+    # Find cell types that exist in both normal and tumor
+    cell_types_in_both <- intersect(
+        unique((connector_data %>% filter(group == "normal", percentage > 0))$cell_type_dtl),
+        unique((connector_data %>% filter(group == "tumor", percentage > 0))$cell_type_dtl)
+    )
+
+    # Create the connected stacked bar plot
+    p_connected <- ggplot() +
+        # Add bars (width reduced from 0.8 to 0.4)
+        geom_rect(
+            data = connector_data,
+            aes(
+                xmin = as.numeric(factor(group)) - 0.2, # Changed from -0.4 to -0.2
+                xmax = as.numeric(factor(group)) + 0.2, # Changed from +0.4 to +0.2
+                ymin = y_bottom,
+                ymax = y_top,
+                fill = cell_type_dtl
+            )
+        ) +
+        # Add connecting lines ONLY for cell types that exist in both normal and tumor
+        # Also update x coordinates for the connecting lines
+        geom_segment(
+            data = connector_data %>%
+                select(group, cell_type_dtl, y_bottom, y_top) %>%
+                pivot_wider(names_from = group, values_from = c(y_bottom, y_top)) %>%
+                filter(cell_type_dtl %in% cell_types_in_both) %>% # Only include cell types in both
+                filter(!is.na(y_bottom_normal) & !is.na(y_bottom_tumor)),
+            aes(
+                x = 1 + 0.2, xend = 2 - 0.2, # Changed from +0.4/-0.4 to +0.2/-0.2
+                y = y_bottom_normal, yend = y_bottom_tumor
+            ),
+            color = "grey50", linetype = "dashed", size = 0.5
+        ) +
+        geom_segment(
+            data = connector_data %>%
+                select(group, cell_type_dtl, y_bottom, y_top) %>%
+                pivot_wider(names_from = group, values_from = c(y_bottom, y_top)) %>%
+                filter(cell_type_dtl %in% cell_types_in_both) %>% # Only include cell types in both
+                filter(!is.na(y_top_normal) & !is.na(y_top_tumor)),
+            aes(
+                x = 1 + 0.2, xend = 2 - 0.2, # Changed from +0.4/-0.4 to +0.2/-0.2
+                y = y_top_normal, yend = y_top_tumor
+            ),
+            color = "grey50", linetype = "dashed", size = 0.5
+        ) +
+        # Add text labels in the center of each bar segment
+        geom_text(
+            data = connector_data %>%
+                filter(percentage >= 2), # Only label segments that are at least 2% (adjust as needed)
+            aes(
+                x = as.numeric(factor(group)),
+                y = (y_bottom + y_top) / 2, # Center of the bar segment
+                label = cell_type_dtl,
+                color = "white" # All text white
+            ),
+            fontface = "bold", # Make all text bold
+            size = 3, # Adjust text size as needed
+            check_overlap = TRUE # Helps prevent overlapping labels
+        ) +
+        # Labels and theme
+        scale_x_continuous(
+            breaks = 1:2, labels = c("normal", "tumor"),
+            limits = c(0.5, 2.5)
+        ) +
+        scale_fill_manual(values = custom_colors) +
+        scale_color_identity() + # Use the colors directly specified in geom_text
+        labs(
+            title = "Cell Type Distribution Changes Between Normal and Tumor",
+            x = "Sample Type",
+            y = "Percentage (%)"
+        ) +
+        theme_minimal() +
+        theme(
+            legend.position = "none", # Remove legend
+            panel.grid.major.x = element_blank(),
+            panel.grid.minor = element_blank(),
+            plot.background = element_rect(fill = "white")
+        )
+    ggsave("results/109.paper/Fig1/cell_type_distribution_connected.tiff", p_connected, width = 10, height = 8)
+
+    # Add a percentage change plot to visualize the shifts
+    p_change <- ggplot(cell_type_changes, aes(x = percentage_change, y = cell_type_dtl, fill = percentage_change > 0)) +
+        geom_bar(stat = "identity") +
+        geom_vline(xintercept = 0, linetype = "dashed", color = "black") +
+        scale_fill_manual(
+            values = c("TRUE" = "#E64B35FF", "FALSE" = "#4DBBD5FF"),
+            labels = c("TRUE" = "Increase", "FALSE" = "Decrease"),
+            name = "Change Direction"
+        ) +
+        labs(
+            title = "Change in Cell Type Proportions (Tumor vs Normal)",
+            x = "Percentage Point Change",
+            y = "Cell Type"
+        ) +
+        theme_minimal() +
+        theme(
+            legend.position = "top",
+            plot.background = element_rect(fill = "white")
+        )
+    ggsave("results/109.paper/Fig1/cell_type_percentage_change.tiff", p_change, width = 8, height = 6)
+
+    # Original stacked bar plot with new ordering
+    p_bar <- ggplot(connector_data, aes(x = group, y = percentage, fill = cell_type_dtl)) +
         geom_bar(stat = "identity", position = "stack") +
-        scale_fill_brewer(palette = "Set3") +
+        scale_fill_manual(values = custom_colors) +
         labs(
             title = "Cell Type Distribution by Sample",
             x = "Sample Type",
@@ -146,8 +305,7 @@ paper_final_annotation <- function(sc_final) {
         theme_bw() +
         theme(plot.background = element_rect(fill = "white"))
 
-    ggsave("results/109.paper/Fig1/cell_type_distribution_bar.png", p_bar, width = 8, height = 6)
-
+    ggsave("results/109.paper/Fig1/cell_type_distribution_bar.tiff", p_bar, width = 8, height = 6)
     "results/109.paper/Fig1"
 }
 paper_clc_expression_by_sample <- function(sc_final) {
@@ -162,28 +320,28 @@ paper_clc_expression_by_sample <- function(sc_final) {
         violin = FALSE, pt.style = "quasirandom", ncol = 1
     ) +
         theme(plot.background = element_rect(fill = "white"))
-    ggsave("results/109.paper/Fig1/CLC/clc_expression_by_sample_violinplot.png", p, width = 6, height = 15)
+    ggsave("results/109.paper/Fig1/CLC/clc_expression_by_sample_violinplot.tiff", p, width = 6, height = 15)
     p <- VlnPlot2(sc_final,
         features = clc_markers,
         group.by = "dataset",
         violin = FALSE, pt.style = "quasirandom", ncol = 1
     ) +
         theme(plot.background = element_rect(fill = "white"))
-    ggsave("results/109.paper/Fig1/CLC/clc_expression_by_sample_all_violinplot.png", p, width = 6, height = 15)
+    ggsave("results/109.paper/Fig1/CLC/clc_expression_by_sample_all_violinplot.tiff", p, width = 6, height = 15)
     p <- VlnPlot2(sc_final %>% filter(group == "tumor"),
         features = clc_markers,
         group.by = "cell_type_dtl",
         violin = FALSE, pt.style = "quasirandom", ncol = 1
     ) +
         theme(plot.background = element_rect(fill = "white"))
-    ggsave("results/109.paper/Fig1/CLC/clc_expression_by_sample_tumor_violinplot.png", p, width = 6, height = 15)
+    ggsave("results/109.paper/Fig1/CLC/clc_expression_by_sample_tumor_violinplot.tiff", p, width = 6, height = 15)
     p <- VlnPlot2(sc_final %>% filter(group == "normal"),
         features = clc_markers,
         group.by = "cell_type_dtl",
         violin = FALSE, pt.style = "quasirandom", ncol = 1
     ) +
         theme(plot.background = element_rect(fill = "white"))
-    ggsave("results/109.paper/Fig1/CLC/clc_expression_by_sample_normal_violinplot.png", p, width = 6, height = 15)
+    ggsave("results/109.paper/Fig1/CLC/clc_expression_by_sample_normal_violinplot.tiff", p, width = 6, height = 15)
     # Find DEGs for CLC vs rest in normal and tumor samples separately
     # Create directory for DEG results
     deg_dir <- file.path("results/109.paper/Fig1/CLC", "DEGs")
@@ -312,7 +470,7 @@ paper_myeloid_annotate <- function(sc_mye) {
 
     p2 <- Heatmap(toplot %>% t(), lab_fill = "zscore", facet_col = gene_groups) +
         theme(plot.background = element_rect(fill = "white"))
-    ggsave("results/109.paper/Fig2/myeloid_annotation_heatmap.png", p2, width = 7, height = 5)
+    ggsave("results/109.paper/Fig2/myeloid_annotation_heatmap.tiff", p2, width = 7, height = 5)
     p <- DotPlot2(sc_mye,
         features = markers,
         group.by = "cell_type_dtl",
@@ -322,7 +480,7 @@ paper_myeloid_annotate <- function(sc_mye) {
         show_grid = FALSE
     ) +
         theme(plot.background = element_rect(fill = "white"))
-    ggsave("results/109.paper/Fig2/myeloid_annotation_dotplot.png", p, width = 7, height = 7)
+    ggsave("results/109.paper/Fig2/myeloid_annotation_dotplot.tiff", p, width = 7, height = 7)
 }
 
 paper_myeloid_lipid_DEG <- function(sc_mye) {
@@ -473,7 +631,7 @@ paper_myeloid_lipid_DEG <- function(sc_mye) {
                 plot.background = element_rect(fill = "white")
             )
 
-        filename <- paste0("results/109.paper/Fig2/myeloid_lipid_", tolower(ct), "_dotplot.png")
+        filename <- paste0("results/109.paper/Fig2/myeloid_lipid_", tolower(ct), "_dotplot.tiff")
         ggsave(filename, p, width = 7, height = 7)
     }
 
@@ -504,14 +662,15 @@ paper_TREM2_LAM_violin <- function(sc_mye) {
             legend.position = "top",
             plot.background = element_rect(fill = "white")
         )
-    ggsave("results/109.paper/Fig2/TREM2_LAM_violin.png", p, width = 10, height = 10)
-    
+    ggsave("results/109.paper/Fig2/TREM2_LAM_violin.tiff", p, width = 10, height = 10)
+
     # Add comparison between APOE_LAM and other myeloid cells
     # Create a new column to identify APOE_LAM vs other myeloid cells
-    sc_mye$comparison_group <- ifelse(sc_mye$cell_type_dtl == "APOE_LAM", 
-                                     "APOE_LAM", 
-                                     "Other Myeloid")
-    
+    sc_mye$comparison_group <- ifelse(sc_mye$cell_type_dtl == "APOE_LAM",
+        "APOE_LAM",
+        "Other Myeloid"
+    )
+
     # Plot violin plots for ABCA8 and RORA
     p2 <- VlnPlot2(
         sc_mye,
@@ -530,8 +689,8 @@ paper_TREM2_LAM_violin <- function(sc_mye) {
             legend.position = "top",
             plot.background = element_rect(fill = "white")
         )
-    ggsave("results/109.paper/Fig2/APOE_LAM_vs_others_violin.png", p2, width = 10, height = 10)
-    "results/109.paper/Fig2/TREM2_LAM_violin.png"
+    ggsave("results/109.paper/Fig2/APOE_LAM_vs_others_violin.tiff", p2, width = 10, height = 10)
+    "results/109.paper/Fig2/TREM2_LAM_violin.tiff"
 }
 paper_myeloid_GSEA <- function(sc_mye) {
     # Create directory for results
@@ -720,7 +879,7 @@ paper_myeloid_GSEA <- function(sc_mye) {
             ggsave(
                 paste0(
                     "results/109.paper/Fig2/myeloid_lipid_lollipop_",
-                    gsub(" ", "_", tolower(ct)), ".png"
+                    gsub(" ", "_", tolower(ct)), ".tiff"
                 ),
                 p,
                 width = 10, height = 0.3 * nrow(ct_data) + 2
@@ -745,7 +904,7 @@ paper_myeloid_GSEA <- function(sc_mye) {
     #                          cluster.rows = FALSE,
     #                          cluster.columns = TRUE)
 
-    #     ggsave("results/109.paper/Fig2/myeloid_lipid_GSEA_filtered_heatmap.png",
+    #     ggsave("results/109.paper/Fig2/myeloid_lipid_GSEA_filtered_heatmap.tiff",
     #            p_filtered, width = 10, height = 8)
 
     #     # Create ridgeplots for these specific pathways
@@ -758,7 +917,7 @@ paper_myeloid_GSEA <- function(sc_mye) {
     #                            add.rug = TRUE)
 
     #         ggsave(paste0("results/109.paper/Fig2/ridge_filtered_",
-    #                       gsub("[^[:alnum:]]", "_", pathway), ".png"),
+    #                       gsub("[^[:alnum:]]", "_", pathway), ".tiff"),
     #                p_ridge, width = 8, height = 6)
     #     }
     # }
@@ -776,7 +935,7 @@ paper_tcell_exhaustion <- function(sc_tcell) {
         show_grid = FALSE
     ) +
         theme(plot.background = element_rect(fill = "white"))
-    ggsave("results/109.paper/Fig3/tcell_exhaustion_dotplot.png", p, width = 10, height = 8)
+    ggsave("results/109.paper/Fig3/tcell_exhaustion_dotplot.tiff", p, width = 10, height = 8)
     "results/109.paper/Fig3"
 }
 
@@ -866,7 +1025,7 @@ paper_tcell_fate_DEG <- function(sc_tcell) {
     # ) +
     #     theme(plot.background = element_rect(fill = "white"))
 
-    # ggsave("results/109.paper/Fig3/tcell_fate_volcano.png", p_volcano, width = 10, height = 8)
+    # ggsave("results/109.paper/Fig3/tcell_fate_volcano.tiff", p_volcano, width = 10, height = 8)
 
     # # Create a heatmap of top DEGs
     # top_genes <- c(
@@ -910,7 +1069,7 @@ paper_tcell_fate_DEG <- function(sc_tcell) {
     # )
 
     # # Save the heatmap
-    # png("results/109.paper/Fig3/tcell_fate_heatmap.png", width = 8, height = 10, units = "in", res = 300)
+    # tiff("results/109.paper/Fig3/tcell_fate_heatmap.tiff", width = 8, height = 10, units = "in", res = 300)
     # draw(hm)
     # dev.off()
 
@@ -934,7 +1093,7 @@ paper_tcell_fate_DEG <- function(sc_tcell) {
     #         axis.text.x = element_text(angle = 45, hjust = 1)
     #     )
 
-    # ggsave("results/109.paper/Fig3/tcell_fate_dotplot.png", p_dotplot, width = 10, height = 6)
+    # ggsave("results/109.paper/Fig3/tcell_fate_dotplot.tiff", p_dotplot, width = 10, height = 6)
 
     # Return the path to the results directory
     return("results/109.paper/Fig3")
@@ -979,7 +1138,7 @@ paper_tcell_full_dotplot <- function(sc_tcell) {
         show_grid = FALSE
     ) +
         theme(plot.background = element_rect(fill = "white"))
-    ggsave("results/109.paper/Fig3/tcell_full_dotplot.png", p, width = 8, height = 15)
+    ggsave("results/109.paper/Fig3/tcell_full_dotplot.tiff", p, width = 8, height = 15)
 }
 paper_hormone_receptor_expression <- function(sc_final) {
     # Create directory for results
@@ -1000,7 +1159,7 @@ paper_hormone_receptor_expression <- function(sc_final) {
             axis.text.x = element_text(angle = 45, hjust = 1)
         )
 
-    ggsave("results/109.paper/HormoneReceptors/hormone_receptors_violin.png", p_violin, width = 12, height = 10)
+    ggsave("results/109.paper/HormoneReceptors/hormone_receptors_violin.tiff", p_violin, width = 12, height = 10)
 
     # Create dot plots for better visualization of expression pattern
     p_dot <- DotPlot2(sc_final,
@@ -1013,7 +1172,7 @@ paper_hormone_receptor_expression <- function(sc_final) {
             axis.text.x = element_text(angle = 45, hjust = 1)
         )
 
-    ggsave("results/109.paper/HormoneReceptors/hormone_receptors_dotplot.png", p_dot, width = 10, height = 8)
+    ggsave("results/109.paper/HormoneReceptors/hormone_receptors_dotplot.tiff", p_dot, width = 10, height = 8)
 
     # Calculate average expression by cell type
     avg_exp <- AverageExpression(sc_final,
@@ -1051,7 +1210,7 @@ paper_hormone_receptor_expression <- function(sc_final) {
             plot.background = element_rect(fill = "white")
         )
 
-    ggsave("results/109.paper/HormoneReceptors/hormone_receptors_top_expressing_barplot.png", p_bar, width = 12, height = 8)
+    ggsave("results/109.paper/HormoneReceptors/hormone_receptors_top_expressing_barplot.tiff", p_bar, width = 12, height = 8)
 
     # Create a detailed feature plot to visualize expression on UMAP
     p_feature <- DimPlot2(sc_final,
@@ -1063,7 +1222,7 @@ paper_hormone_receptor_expression <- function(sc_final) {
     ) +
         theme(plot.background = element_rect(fill = "white"))
 
-    ggsave("results/109.paper/HormoneReceptors/hormone_receptors_featureplot.png", p_feature, width = 10, height = 12)
+    ggsave("results/109.paper/HormoneReceptors/hormone_receptors_featureplot.tiff", p_feature, width = 10, height = 12)
 
     # Calculate the percentage of cells expressing each receptor by cell type using magic imputation
     percent_expr <- data.frame()
@@ -1145,7 +1304,7 @@ paper_hormone_receptor_expression <- function(sc_final) {
             plot.background = element_rect(fill = "white")
         )
 
-    ggsave("results/109.paper/HormoneReceptors/hormone_receptors_percent_heatmap.png", p_heatmap, width = 14, height = 5)
+    ggsave("results/109.paper/HormoneReceptors/hormone_receptors_percent_heatmap.tiff", p_heatmap, width = 14, height = 5)
 
     # Create a bar plot showing percentage of cells expressing each receptor
     p_bar <- ggplot(percent_expr, aes(x = reorder(cell_type, percent_expressing), y = percent_expressing, fill = group)) +
@@ -1162,7 +1321,7 @@ paper_hormone_receptor_expression <- function(sc_final) {
             plot.background = element_rect(fill = "white")
         )
 
-    ggsave("results/109.paper/HormoneReceptors/hormone_receptors_percent_barplot.png", p_bar, width = 12, height = 10)
+    ggsave("results/109.paper/HormoneReceptors/hormone_receptors_percent_barplot.tiff", p_bar, width = 12, height = 10)
 
     # Get the top 5 cell types with highest expression percentage for each receptor and group
     top5_percent <- percent_expr %>%

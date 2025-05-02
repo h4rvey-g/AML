@@ -52,20 +52,6 @@ list(
         options(max.print = 12, spe = "human")
         GeneSetAnalysisGO() %>% names()
     }),
-    # tar_target(
-    #     sc_filtered,
-    #     sc_final %>% filter(cell_type == "Plasticity")
-    # ),
-    # tar_target(GSEA_Plasticity_path, run_GSEA_Plasticity(sc_filtered, parents),
-    #     format = "file",
-    #     pattern = map(parents)
-    # ),
-    # tar_target(GSEA_Plasticity_hallmark_path, compare_cell_types_hallmark50(sc_filtered),
-    #     format = "file"
-    # ),
-    # tar_target(calculate_DEG_Fib_vs_Others_path, calculate_DEG_mCAF_vs_Others(sc_filtered),
-    #     format = "file"
-    # ),
     tar_target(cell_communication_path, cell_communication(sc_final)),
     tar_target(sc_mye_clust, sub_cluster_myeloid(sc_final)),
     tar_target(sc_mye_annotation, sub_annotation_myeloid(sc_mye_clust, sc_final)),
@@ -94,6 +80,7 @@ list(
 
     # paper plot
     tar_target(paper_final_annotation_path, paper_final_annotation(sc_final), format = "file"),
+    tar_target(paper_cell_distribution_path, paper_cell_distribution(sc_final), format = "file"),
     tar_target(paper_clc_expression_by_sample_path, paper_clc_expression_by_sample(sc_final), format = "file"),
     tar_target(paper_myeloid_annotate_path, paper_myeloid_annotate(sc_mye), format = "file"),
     tar_target(paper_myeloid_lipid_DEG_path, paper_myeloid_lipid_DEG(sc_mye), format = "file"),
