@@ -7,9 +7,10 @@ tar_source(c(
     "code/R/104.fine_analysis.R",
     "code/R/105.myeloid.R",
     "code/R/106.Tcell.R",
-    "code/R/107.paper_plot.R",
     "code/R/108.adipo.R",
-    "code/R/102.cluster_annotate copy.R"
+    "code/R/102.cluster_annotate copy.R",
+    "code/R/201.paper_Fig1.R",
+    "code/R/201.paper_Fig2.R"
 ))
 tar_option_set(
     tidy_eval = FALSE,
@@ -74,7 +75,11 @@ list(
     tar_target(tcell_DEG_all_path, tcell_DEG_tumor_vs_normal_all(sc_tcell), format = "file"),
     tar_target(Tex_TRM_correlations, analyze_CD8_Tex_TRM_correlations(sc_tcell)),
     tar_target(GSEA_Tex_TRM_path, run_GSEA_Tex_TRM(sc_tcell), format = "file"),
-    tar_target(sc_adipo, cluster_adipo(sc_final)),
+    tar_target(sc_adipo_clust, subcluster_stromal_cells(sc_final)),
+    tar_target(sc_adipo, sub_annotation_adipo(sc_adipo_clust, sc_final)),
+    tar_target(adipo_composition_test, test_adipo_composition(sc_adipo)),
+    tar_target(adipo_distribution_path, plot_adipo_distribution(sc_adipo, adipo_composition_test), format = "file"),
+    tar_target(plot_stromal_markers_path, plot_stromal_markers(sc_adipo, sc_final), format = "file"),
     tar_target(adipo_DEG_plot_path, adipo_DEG_plot(sc_adipo), format = "file"),
     tar_target(fib_volcano_plot_path, plot_fib_volcano(sc_adipo), format = "file"),
 
@@ -88,6 +93,7 @@ list(
     tar_target(paper_tcell_exhaustion_path, paper_tcell_exhaustion(sc_tcell), format = "file"),
     tar_target(paper_tcell_fate_DEG_path, paper_tcell_fate_DEG(sc_tcell), format = "file"),
     tar_target(paper_TREM2_LAM_violin_path, paper_TREM2_LAM_violin(sc_mye), format = "file"),
+    tar_target(paper_macrophage_proportion_change_path, paper_macrophage_proportion_change(sc_mye), format = "file"),
 
     # re cluster
     tar_target(cell_types, unique(sc_final_2$cell_type_dtl)),

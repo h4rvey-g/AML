@@ -1,3 +1,458 @@
+subcluster_stromal_cells <- function(sc_final) {
+    # Create directory for results
+    dir.create("results/110.adipo/subclusters", showWarnings = FALSE, recursive = TRUE)
+
+    # Define marker genes for different stromal cell types
+    marker_genes <- list(
+        "Fibroblast" = c("COL1A1", "COL1A2", "MGP", "PDGFRA"),
+        "MSC/Progenitor" = c("ID1", "NR2F2", "GLI1", "NGFR"),
+        "MSC_2" = c("ENG", "CD14", "VCAM1", "MCAM"),
+        "Pericyte" = c("PDGFRB", "CSPG4", "RGS5", "ACTA2", "MCAM"),
+        "CAR-like" = c("CXCL12", "LEPR", "FOXC1", "ADIPOQ"),
+        "Negative Markers" = c("PECAM1", "CD34", "PTPRC", "EPCAM")
+    )
+
+    # Combine all markers into a single vector
+    all_markers <- unlist(marker_genes)
+
+    # Subset to only include Fibroblasts and PSCs
+    combined_stromal_cells <- sc_final %>%
+        filter(cell_type_dtl %in% c("Fib", "PSC"))
+
+    # Run clustering on combined data
+    combined_stromal_cells <- combined_stromal_cells %>%
+        RunUMAP(dims = 1:30, reduction = "scvi", reduction.name = "combined_stromal_umap") %>%
+        FindNeighbors(dims = 1:30, reduction = "scvi", graph.name = "combined_snn") %>%
+        FindClusters(
+            resolution = 0.5, algorithm = 4, method = "igraph",
+            graph.name = "combined_snn", cluster.name = "combined_stromal_clusters"
+        )
+
+    # Create UMAP visualization colored by cluster
+    p_combined_clusters <- DimPlot2(combined_stromal_cells,
+        reduction = "combined_stromal_umap",
+        group.by = "combined_stromal_clusters",
+        label = TRUE
+    ) +
+        ggtitle("Combined tumor and normal stromal subclusters") +
+        theme(plot.background = element_rect(fill = "white"))
+
+    # Create UMAP visualization colored by group (tumor vs normal)
+    p_combined_group <- DimPlot2(combined_stromal_cells,
+        reduction = "combined_stromal_umap",
+        group.by = "group",
+        cols = c("normal" = "#4DBBD5FF", "tumor" = "#E64B35FF")
+    ) +
+        ggtitle("Combined stromal subclusters by sample type") +
+        theme(plot.background = element_rect(fill = "white"))
+
+    # Save plots
+    ggsave("results/110.adipo/subclusters/combined_umap_clusters.png", p_combined_clusters, width = 8, height = 7)
+    ggsave("results/110.adipo/subclusters/combined_umap_group.png", p_combined_group, width = 8, height = 7)
+
+    # Create dotplot of all markers across clusters
+    p_combined_dotplot <- DotPlot2(combined_stromal_cells,
+        features = all_markers,
+        group.by = "combined_stromal_clusters"
+    ) +
+        theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+        theme(plot.background = element_rect(fill = "white"))
+
+    ggsave("results/110.adipo/subclusters/combined_dotplot.png", p_combined_dotplot, width = 12, height = 6)
+
+    # Generate heatmap of marker expression by subtype
+    toplot_combined <- CalcStats(combined_stromal_cells,
+        features = all_markers,
+        group.by = "combined_stromal_clusters",
+        method = "zscore",
+        order = "value"
+    )
+
+    gene_groups_combined <- rep(names(marker_genes), lengths(marker_genes)) %>%
+        setNames(marker_genes %>% unlist())
+    gene_groups_combined <- gene_groups_combined[rownames(toplot_combined)]
+
+    p_combined_heatmap <- Heatmap(t(toplot_combined),
+        lab_fill = "zscore",
+        facet_col = gene_groups_combined
+    ) +
+        ggtitle("Combined stromal clusters marker expression") +
+        theme(plot.background = element_rect(fill = "white"))
+
+    ggsave("results/110.adipo/subclusters/combined_marker_heatmap_zscores.png",
+        p_combined_heatmap,
+        width = 14, height = 7
+    )
+
+    write_tsv(
+        toplot_combined %>% as.data.frame() %>% rownames_to_column("gene"),
+        "results/110.adipo/subclusters/combined_marker_heatmap_zscores.tsv"
+    )
+
+    return(combined_stromal_cells)
+}
+sub_annotation_adipo <- function(sc_adipo_clust, sc_final) {
+    # Create directory for results
+    dir.create("results/110.adipo/subclusters", showWarnings = FALSE, recursive = TRUE)
+
+    # Define new annotations for the combined stromal clusters
+    # Define annotations for the combined stromal clusters
+    annotations <- c(
+        "1" = "MSC",
+        "2" = "CAR-like cells",
+        "3" = "MSC",
+        "4" = "MSC",
+        "5" = "MSC",
+        "6" = "PSC"
+    )
+
+    # Add the annotations to the subclustered object
+    sc_adipo_clust$cell_type_dtl_new <- unname(annotations[as.character(sc_adipo_clust$combined_stromal_clusters)])
+
+    # Create a mapping from cell IDs to new annotations
+    cell_annotations <- data.frame(
+        cell_id = Cells(sc_adipo_clust),
+        cell_type_dtl = sc_adipo_clust$cell_type_dtl_new,
+        stringsAsFactors = FALSE
+    )
+
+    # Update the cell_type_dtl in sc_final for cells in the subcluster
+    sc_final$cell_type_dtl <- as.character(sc_final$cell_type_dtl)
+    matching_cells <- intersect(Cells(sc_final), cell_annotations$cell_id)
+    cell_mapping <- setNames(cell_annotations$cell_type_dtl, cell_annotations$cell_id)
+    sc_final$cell_type_dtl[matching_cells] <- cell_mapping[matching_cells]
+
+    sc_adipo <- sc_final %>%
+        filter(cell_type_dtl %in% c("Fibroblasts", "MSC", "CAR-like cells", "PSC", "Adipo"))
+    # do UMAP
+    sc_adipo <- RunUMAP(sc_adipo, dims = 1:30, reduction = "scvi", reduction.name = "adipo_umap")
+    # Create UMAP visualization with new annotations
+    p_annotated_clusters <- DimPlot2(sc_adipo,
+        reduction = "adipo_umap",
+        group.by = "cell_type_dtl",
+        label = TRUE
+    ) +
+        ggtitle("Annotated Adipocyte and Stromal cells") +
+        theme(plot.background = element_rect(fill = "white"))
+
+    # Save plot
+    ggsave("results/110.adipo/annotated_umap_clusters.png", p_annotated_clusters, width = 8, height = 7)
+
+    # Create dotplot of markers by annotated cell types
+    marker_genes <- list(
+        "MSC/Progenitor" = c("MGP", "PDGFRA", "ENG", "CD14", "THY1", "NT5E"),
+        "Pericyte" = c("PDGFRB", "CSPG4", "RGS5", "ACTA2", "MCAM"),
+        "CAR-like" = c("CXCL12", "LEPR", "FOXC1"),
+        # "Negative Markers" = c("PECAM1", "CD34", "PTPRC", "EPCAM"),
+        "Adipocyte" = c("ADIPOQ", "FABP4", "PPARG")
+    )
+
+    # Combine all markers into a single vector
+    all_markers <- unlist(marker_genes)
+
+    p_annotated_dotplot <- DotPlot2(sc_adipo,
+        features = all_markers,
+        group.by = "cell_type_dtl"
+    ) +
+        theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+        theme(plot.background = element_rect(fill = "white"))
+
+    ggsave("results/110.adipo/annotated_dotplot.png", p_annotated_dotplot, width = 12, height = 6)
+    # Generate heatmap of marker expression by subtype
+    toplot <- CalcStats(sc_adipo,
+        features = all_markers,
+        group.by = "cell_type_dtl",
+        method = "zscore",
+        order = "value"
+    )
+
+    gene_groups <- rep(names(marker_genes), lengths(marker_genes)) %>%
+        setNames(marker_genes %>% unlist())
+    gene_groups <- gene_groups[rownames(toplot)]
+
+    p_heatmap <- Heatmap(t(toplot),
+        lab_fill = "zscore",
+        facet_col = gene_groups
+    ) +
+        ggtitle("Stromal cell type marker expression") +
+        theme(plot.background = element_rect(fill = "white"))
+
+    ggsave("results/110.adipo/heatmap_zscores.png",
+        p_heatmap,
+        width = 14, height = 7
+    )
+
+    write_tsv(
+        toplot %>% as.data.frame() %>% rownames_to_column("gene"),
+        "results/110.adipo/heatmap_zscores.tsv"
+    )
+
+    sc_adipo
+}
+
+test_adipo_composition <- function(sc_adipo) {
+    # Create directory
+    dir.create("results/110.adipo/distribution", showWarnings = FALSE, recursive = TRUE)
+
+    # Prepare data for sccomp
+    sc_adipo <- sc_adipo %>%
+        AddMetaData(
+            object = .,
+            metadata = .$dataset,
+            col.name = "sample"
+        ) %>%
+        AddMetaData(
+            object = .,
+            metadata = .$cell_type_dtl,
+            col.name = "cell_group"
+        )
+
+    # Run composition test
+    composition_test <- sc_adipo %>%
+        sccomp_estimate(
+            formula_composition = ~group,
+            .sample = sample,
+            .cell_group = cell_group,
+            bimodal_mean_variability_association = TRUE,
+            cores = 20,
+            verbose = TRUE
+        ) %>%
+        sccomp_remove_outliers(cores = 31, verbose = FALSE) %>%
+        sccomp_test()
+
+    # Generate plots
+    p1 <- composition_test %>%
+        sccomp_boxplot(factor = "group") +
+        theme(plot.background = element_rect(fill = "white"))
+    ggsave("results/110.adipo/distribution/boxplot.png", p1, width = 10, height = 8)
+
+    p2 <- composition_test %>%
+        plot_1D_intervals() +
+        theme(plot.background = element_rect(fill = "white"))
+    ggsave("results/110.adipo/distribution/effect_size.png", p2, width = 8, height = 6)
+
+    p3 <- composition_test %>%
+        plot_2D_intervals() +
+        theme(plot.background = element_rect(fill = "white"))
+    ggsave("results/110.adipo/distribution/abundance_variability.png", p3, width = 8, height = 6)
+
+    # Save fold changes and test results
+    fold_changes <- composition_test %>%
+        sccomp_proportional_fold_change(
+            formula_composition = ~group,
+            from = "normal",
+            to = "tumor"
+        ) %>%
+        select(cell_group, statement)
+
+    write_tsv(fold_changes, "results/110.adipo/distribution/fold_changes.tsv")
+
+    write_tsv(
+        composition_test %>%
+            select(-count_data),
+        "results/110.adipo/distribution/test_results.tsv"
+    )
+
+    composition_test
+}
+
+plot_adipo_distribution <- function(sc_adipo, m_composition_test) {
+    dir.create("results/110.adipo/distribution", showWarnings = FALSE, recursive = TRUE)
+
+    # Calculate distribution percentages
+    df1 <- ClusterDistrBar(origin = sc_adipo$dataset, cluster = sc_adipo$cell_type_dtl, plot = FALSE) %>%
+        as.data.frame() %>%
+        rownames_to_column("cluster") %>%
+        pivot_longer(-cluster, names_to = "origin", values_to = "percentage")
+
+    # Calculate cell counts
+    cell_counts <- sc_adipo@meta.data %>%
+        group_by(cell_type_dtl, dataset) %>%
+        summarise(count = n(), .groups = "drop") %>%
+        group_by(cell_type_dtl) %>%
+        summarise(
+            N_count = sum(count[str_starts(dataset, "N")]),
+            T_count = sum(count[str_starts(dataset, "T")]),
+            .groups = "drop"
+        )
+
+    # Add cell counts to cluster labels
+    df1 <- df1 %>%
+        left_join(cell_counts, by = c("cluster" = "cell_type_dtl")) %>%
+        mutate(cluster = sprintf("%s\n(N=%d,T=%d)", cluster, N_count, T_count))
+    # Get significance stars from composition test
+    m_composition_test_res <- m_composition_test %>%
+        filter(factor == "group", c_FDR < 0.05) %>%
+        mutate(stars = case_when(
+            c_FDR < 0.001 ~ "***",
+            c_FDR < 0.01 ~ "**",
+            c_FDR < 0.05 ~ "*",
+            TRUE ~ ""
+        )) %>%
+        select(cell_group, stars)
+
+    # Add significance stars and cell counts to labels
+    df1 <- df1 %>%
+        mutate(cluster = map_chr(str_extract(cluster, ".*(?=\\n)"), ~ {
+            stars <- m_composition_test_res$stars[m_composition_test_res$cell_group == .x]
+            count_info <- sprintf("(N=%d,T=%d)", cell_counts$N_count[cell_counts$cell_type_dtl == .x], cell_counts$T_count[cell_counts$cell_type_dtl == .x])
+            if (length(stars) > 0 && stars != "") {
+                paste0(.x, "\n", count_info, "\n", stars)
+            } else {
+                paste0(.x, "\n", count_info, "\n")
+            }
+        }))
+
+    # Create and save plot
+    p <- tidyplot(
+        df1 %>%
+            mutate(group = ifelse(str_starts(origin, "N"), "N", "T")),
+        x = cluster, y = percentage, color = group
+    ) %>%
+        add_mean_bar() %>%
+        add_sem_errorbar() %>%
+        adjust_colors(c(colors_discrete_metro, colors_discrete_seaside)) %>%
+        adjust_size(width = 170, height = 100) %>%
+        adjust_x_axis(rotate_labels = 45)
+
+    tidyplots::save_plot(p, "results/110.adipo/distribution/adipo_distribution.png")
+    write_tsv(
+        df1 %>%
+            mutate(cluster = str_extract(cluster, ".*(?=\\n)")),
+        "results/110.adipo/distribution/adipo_distribution.tsv"
+    )
+
+    return("results/110.adipo/distribution")
+}
+plot_stromal_markers <- function(sc_adipo, sc_final) {
+    # Create directory for results
+    dir.create("results/110.adipo/stromal_markers", showWarnings = FALSE, recursive = TRUE)
+
+    # Update the cell_type_dtl in sc_final from sc_adipo
+    cell_mapping <- setNames(sc_adipo$cell_type_dtl, colnames(sc_adipo))
+    matching_cells <- intersect(Cells(sc_final), Cells(sc_adipo))
+    sc_final$cell_type_dtl[matching_cells] <- cell_mapping[matching_cells]
+
+    # Define marker genes based on the categories provided
+    marker_genes <- list(
+        "Fibroblast Marker" = c("MCAM", "ENG", "POSTN", "COL1A1", "TNC", "COL1A2", "THY1", "COL3A1"),
+        "MSC Marker" = c("STRIP1", "KLF5", "MTAP", "MFAP5", "EFNA5", "NT5E", "NES"),
+        "Fibro + MSC Marker" = c(
+            "ENG", "THY1", "ITGAM", "CD14", "CD19", "CD34",
+            "PTPRC", "CD79A", "HLA-DRA", "ACTA2"
+        )
+    )
+
+    # Combine all markers into a single vector
+    all_markers <- unlist(marker_genes)
+
+    # Create gene groups mapping for heatmap faceting
+    gene_groups <- rep(names(marker_genes), lengths(marker_genes)) %>%
+        setNames(marker_genes %>% unlist())
+
+    # Define datasets to analyze
+    datasets <- list(
+        stromal = list(
+            data = sc_final %>% filter(cell_type_dtl %in% c("Fib", "PSC", "MSC", "CAR-like cells", "Adipo")),
+            output_prefix = "stromal",
+            title = "Stromal cell"
+        ),
+        all = list(
+            data = sc_final,
+            output_prefix = "all_cell_types",
+            title = "All cell types"
+        )
+    )
+
+    # Create plots for each dataset
+    for (dataset_name in names(datasets)) {
+        dataset <- datasets[[dataset_name]]
+        sc_data <- dataset$data
+        prefix <- dataset$output_prefix
+        title_prefix <- dataset$title
+        
+        # Basic dotplot
+        p_dotplot <- DotPlot2(sc_data,
+            features = all_markers,
+            group.by = "cell_type_dtl"
+        ) +
+            theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+            theme(plot.background = element_rect(fill = "white"))
+
+        ggsave(paste0("results/110.adipo/stromal_markers/", prefix, "_markers_dotplot.png"), 
+               p_dotplot, width = ifelse(dataset_name == "all", 14, 12), height = ifelse(dataset_name == "all", 8, 6))
+
+        # Heatmap
+        # Z-score heatmap
+        toplot <- CalcStats(sc_data,
+            features = all_markers,
+            group.by = "cell_type_dtl",
+            method = "zscore",
+            order = "value"
+        )
+
+        # Filter gene_groups to only include genes present in the toplot data
+        filtered_gene_groups <- gene_groups[rownames(toplot)]
+
+        p_heatmap <- Heatmap(t(toplot),
+            lab_fill = "zscore",
+            facet_col = filtered_gene_groups
+        ) +
+            ggtitle(paste0(title_prefix, " marker expression (z-score)")) +
+            theme(plot.background = element_rect(fill = "white"))
+
+        ggsave(paste0("results/110.adipo/stromal_markers/", prefix, "_marker_heatmap_zscores.png"),
+            p_heatmap,
+            width = ifelse(dataset_name == "all", 16, 14), height = ifelse(dataset_name == "all", 10, 7)
+        )
+        
+        # Raw mean expression heatmap
+        toplot_mean <- CalcStats(sc_data,
+            features = all_markers,
+            group.by = "cell_type_dtl",
+            method = "mean",
+            order = "value"
+        )
+
+        p_heatmap_mean <- Heatmap(t(toplot_mean),
+            lab_fill = "expression",
+            facet_col = filtered_gene_groups
+        ) +
+            ggtitle(paste0(title_prefix, " marker expression (mean)")) +
+            theme(plot.background = element_rect(fill = "white"))
+
+        ggsave(paste0("results/110.adipo/stromal_markers/", prefix, "_marker_heatmap_mean.png"),
+            p_heatmap_mean,
+            width = ifelse(dataset_name == "all", 16, 14), height = ifelse(dataset_name == "all", 10, 7)
+        )
+
+        # Split by group dotplot
+        p_split_dotplot <- DotPlot2(sc_data,
+            features = all_markers,
+            group.by = "cell_type_dtl",
+            split.by = "group",
+            split.by.method = "color",
+            split.by.colors = c("#4DBBD5FF", "#E64B35FF")
+        ) +
+            theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+            theme(plot.background = element_rect(fill = "white"))
+
+        ggsave(paste0("results/110.adipo/stromal_markers/", prefix, "_markers_dotplot_by_group.png"), 
+               p_split_dotplot, width = ifelse(dataset_name == "all", 16, 14), height = ifelse(dataset_name == "all", 10, 7))
+    }
+
+    # Calculate and save expression data for the stromal markers
+    expr_data <- AverageExpression(datasets$stromal$data,
+        features = all_markers,
+        group.by = "cell_type_dtl",
+        slot = "data"
+    )
+
+    write.csv(expr_data$RNA, "results/110.adipo/stromal_markers/stromal_marker_expression.csv")
+
+    # Return the path to results
+    return("results/110.adipo/stromal_markers")
+}
 adipo_DEG_plot <- function(sc_adipo) {
     # Create directory if it doesn't exist
     dir.create("results/110.adipo/DEG", showWarnings = FALSE, recursive = TRUE)
@@ -117,12 +572,12 @@ adipo_DEG_plot <- function(sc_adipo) {
     plot_data_long <- pivot_longer(
         plot_data,
         cols = c(pct_expr_tumor, pct_expr_normal),
-        names_to = "condition",
+        names_to = "group",
         values_to = "pct_expr"
     )
 
-    # Clean up condition names
-    plot_data_long$condition <- gsub("pct_expr_", "", plot_data_long$condition)
+    # Clean up group names
+    plot_data_long$group <- gsub("pct_expr_", "", plot_data_long$group)
 
     # Order genes within each category by logFC
     plot_data_long <- plot_data_long %>%
@@ -147,12 +602,12 @@ adipo_DEG_plot <- function(sc_adipo) {
             next
         }
 
-        p <- ggplot(cell_data, aes(x = logFC, y = gene, size = pct_expr, color = condition)) +
+        p <- ggplot(cell_data, aes(x = logFC, y = gene, size = pct_expr, color = group)) +
             geom_point(alpha = 0.8, position = position_identity()) +
             geom_vline(xintercept = 0, linetype = "dashed", color = "darkgray") +
             scale_size_continuous(name = "% Expressing", range = c(1, 10)) +
             scale_color_manual(
-                name = "Condition",
+                name = "group",
                 values = c("tumor" = "#fc8d59", "normal" = "#91bfdb"),
                 labels = c("tumor" = "Tumor", "normal" = "Normal")
             ) +
@@ -172,12 +627,12 @@ adipo_DEG_plot <- function(sc_adipo) {
     }
 
     # Create a combined plot showing both cell types
-    p_combined <- ggplot(plot_data_long, aes(x = logFC, y = gene, size = pct_expr, color = condition, shape = cell_type)) +
+    p_combined <- ggplot(plot_data_long, aes(x = logFC, y = gene, size = pct_expr, color = group, shape = cell_type)) +
         geom_point(alpha = 0.8) +
         geom_vline(xintercept = 0, linetype = "dashed", color = "darkgray") +
         scale_size_continuous(name = "% Expressing", range = c(1, 10)) +
         scale_color_manual(
-            name = "Condition",
+            name = "group",
             values = c("tumor" = "#fc8d59", "normal" = "#91bfdb")
         ) +
         scale_shape_manual(
@@ -253,7 +708,7 @@ plot_fib_volcano <- function(sc_adipo) {
         # Make non-labeled points grey, labeled points orange
         colCustom = data.frame(
             key = deg_results$gene,
-            color = ifelse(deg_results$gene %in% genes_to_label, 'orange', 'grey30')
+            color = ifelse(deg_results$gene %in% genes_to_label, "orange", "grey30")
         ) %>% tibble::deframe()
     ) + theme(plot.background = element_rect(fill = "white")) # Ensure white background
 
@@ -495,7 +950,7 @@ classify_adipocyte_type <- function(sc_adipo) {
 
                 if ((top_score - second_score) < (score_diff_threshold * top_score)) {
                     # It's a mixed type, combine the two types
-                    return(paste(types[sorted_indices[1]], types[sorted_indices[2]], sep="/"))
+                    return(paste(types[sorted_indices[1]], types[sorted_indices[2]], sep = "/"))
                 } else {
                     # Clear dominant score
                     return(types[sorted_indices[1]])
@@ -540,13 +995,15 @@ classify_adipocyte_type <- function(sc_adipo) {
         category.names = c("Brown", "White", "Beige/Brite")
         # set_color = c("#8C3310", "#2166AC", "#D9A441"),
     ) +
-    scale_fill_gradient(low = "white", high = "#2166ac") +
-    labs(title = "Overlap of Adipocyte Type Markers") +
-    theme(plot.background = element_rect(fill = "white"))
+        scale_fill_gradient(low = "white", high = "#2166ac") +
+        labs(title = "Overlap of Adipocyte Type Markers") +
+        theme(plot.background = element_rect(fill = "white"))
 
     # Save the plot
     ggsave("results/110.adipo/adipocyte_types/adipocyte_venn_diagram.png",
-           p_venn, width = 8, height = 8, dpi = 300)
+        p_venn,
+        width = 8, height = 8, dpi = 300
+    )
 
     # Generate a violin plot showing adipocyte type scores by cell type
     score_data <- sc_adipo@meta.data %>%
