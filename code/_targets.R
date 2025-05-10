@@ -82,10 +82,12 @@ list(
     tar_target(plot_stromal_markers_path, plot_stromal_markers(sc_adipo, sc_final), format = "file"),
     tar_target(adipo_DEG_plot_path, adipo_DEG_plot(sc_adipo), format = "file"),
     tar_target(fib_volcano_plot_path, plot_fib_volcano(sc_adipo), format = "file"),
+    tar_target(save_adipo_to_h5ad_path, save_adipo_to_h5ad(sc_adipo), format = "file"),
 
     # paper plot
-    tar_target(paper_final_annotation_path, paper_final_annotation(sc_final), format = "file"),
+    tar_target(sc_final_n, paper_final_annotation(sc_final, sc_adipo)),
     tar_target(paper_cell_distribution_path, paper_cell_distribution(sc_final), format = "file"),
+    tar_target(paper_adipo_distribution_path, paper_plot_adipo_distribution(sc_adipo, adipo_composition_test), format = "file"),
     tar_target(paper_clc_expression_by_sample_path, paper_clc_expression_by_sample(sc_final), format = "file"),
     tar_target(paper_myeloid_annotate_path, paper_myeloid_annotate(sc_mye), format = "file"),
     tar_target(paper_myeloid_lipid_DEG_path, paper_myeloid_lipid_DEG(sc_mye), format = "file"),

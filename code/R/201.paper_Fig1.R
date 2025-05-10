@@ -1,15 +1,16 @@
-paper_final_annotation <- function(sc_final) {
+paper_final_annotation <- function(sc_final, sc_adipo) {
     dir.create("results/109.paper/Fig1", showWarnings = FALSE)
-    # Create directory for results
-    dir.create("results/109.paper/Fig1", recursive = TRUE, showWarnings = FALSE)
-
+    # Update the cell_type_dtl in sc_final from sc_adipo
+    cell_mapping <- setNames(sc_adipo$cell_type_dtl, colnames(sc_adipo))
+    matching_cells <- intersect(Cells(sc_final), Cells(sc_adipo))
+    sc_final$cell_type_dtl[matching_cells] <- cell_mapping[matching_cells]
     # Define a custom color palette for all cell types that will be used consistently
     cell_types <- unique(sc_final$cell_type_dtl) %>% sort()
     set.seed(42) # For reproducible color generation
     custom_colors <- c(
         "#dc467fcc", "#5cb248cc", "#b25ac9cc", "#b4b540cc", "#6b82d9cc", "#ce4f32cc",
         "#49afcfcc", "#cd8f44cc", "#6f56a2cc", "#54a778cc", "#a34673cc", "#767933cc",
-        "#d489c4cc", "#c2685fcc"
+        "#d489c4cc", "#c2685fcc", "#4b9fe3cc"
     )
     names(custom_colors) <- cell_types
 
@@ -61,8 +62,9 @@ paper_final_annotation <- function(sc_final) {
         "ZR" = c("NR5A1", "CYB5A", "SULT2A1"),
         "CLC" = c("TH", "CHGA"),
         "Endo" = c("PECAM1", "EMCN"),
-        "Fib" = c("COL1A1", "COL3A1", "THY1"),
-        "PSC" = c("RGS5", "PDGFRB", "ACTA2"),
+        "MSC/Progenitor" = c("PDGFRA", "ENG", "NT5E", "MGP"),
+        "PSC" = c("PDGFRB", "CSPG4", "RGS5", "ACTA2", "MCAM"),
+        "CAR-like" = c("CXCL12", "LEPR", "FOXC1"),
         "Adipo" = c("ADIPOQ", "FABP4", "PPARG"),
         "Tcell" = c("CD3D", "CD3E", "TRBC1"),
         "Bcell" = c("CD19", "CD79A", "MS4A1"),
@@ -93,7 +95,14 @@ paper_final_annotation <- function(sc_final) {
 
     ggsave("results/109.paper/Fig1/final_annotation_heatmap.tiff", p_all, width = 14, height = 7)
 
-    "results/109.paper/Fig1"
+    # get Number of cells of each cell type in normal and tumor samples, save to tsv
+    cell_type_counts <- sc_final %>%
+        group_by(group, cell_type_dtl) %>%
+        summarise(cell_count = n(), .groups = "drop")
+
+    write_tsv(cell_type_counts, "results/109.paper/Fig1/cell_type_counts.tsv")
+
+    sc_final
 }
 
 paper_cell_distribution <- function(sc_final) {

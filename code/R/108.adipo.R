@@ -654,6 +654,23 @@ adipo_DEG_plot <- function(sc_adipo) {
     return("results/110.adipo/DEG")
 }
 
+save_adipo_to_h5ad <- function(sc_adipo) {
+    # Create directory if it doesn't exist
+    dir.create("data/110.adipo", showWarnings = FALSE, recursive = TRUE)
+    
+    # Path for saving the h5ad file
+    file_path <- "data/110.adipo"
+    file_name <- "sc_adipo.h5ad"
+    
+    # Save the Seurat object as AnnData h5ad file
+    scCustomize::as.anndata(
+        x = sc_adipo, 
+        file_path = file_path, 
+        file_name = file_name
+    )
+    
+    return(file.path(file_path, file_name))
+}
 plot_fib_volcano <- function(sc_adipo) {
     # Create directory if it doesn't exist
     dir.create("results/110.adipo/DEG", showWarnings = FALSE, recursive = TRUE)
@@ -766,7 +783,7 @@ run_adipo_trajectory <- function(sc_adipo) {
     # Generate velocity plots
     scVelo.Plot(
         color = "cell_type_dtl",
-        basis = "umap_cell_embeddings",
+        basis = "adipo_umap_cell_embeddings",
         save = "results/110.adipo/trajectory/velocity_umap.png",
         figsize = c(7, 6),
         conda_env = "base"
