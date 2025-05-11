@@ -10,7 +10,8 @@ tar_source(c(
     "code/R/108.adipo.R",
     "code/R/102.cluster_annotate copy.R",
     "code/R/201.paper_Fig1.R",
-    "code/R/201.paper_Fig2.R"
+    "code/R/201.paper_Fig2.R",
+    "code/R/201.paper_Fig3.R"
 ))
 tar_option_set(
     tidy_eval = FALSE,
@@ -83,13 +84,16 @@ list(
     tar_target(adipo_DEG_plot_path, adipo_DEG_plot(sc_adipo), format = "file"),
     tar_target(fib_volcano_plot_path, plot_fib_volcano(sc_adipo), format = "file"),
     tar_target(save_adipo_to_h5ad_path, save_adipo_to_h5ad(sc_adipo), format = "file"),
+    tar_target(DEG_Car_vs_MSC_res, DEG_Car_vs_MSC(sc_adipo)),
 
     # paper plot
     tar_target(sc_final_n, paper_final_annotation(sc_final, sc_adipo)),
+    tar_target(paper_sub_annotation_adipo_path, paper_sub_annotation_adipo(sc_adipo), format = "file"),
     tar_target(paper_cell_distribution_path, paper_cell_distribution(sc_final), format = "file"),
     tar_target(paper_adipo_distribution_path, paper_plot_adipo_distribution(sc_adipo, adipo_composition_test), format = "file"),
     tar_target(paper_clc_expression_by_sample_path, paper_clc_expression_by_sample(sc_final), format = "file"),
     tar_target(paper_myeloid_annotate_path, paper_myeloid_annotate(sc_mye), format = "file"),
+    tar_target(paper_myeloid_cell_counts_path, paper_myeloid_cell_counts(sc_mye), format = "file"),
     tar_target(paper_myeloid_lipid_DEG_path, paper_myeloid_lipid_DEG(sc_mye), format = "file"),
     tar_target(paper_myeloid_GSEA_path, paper_myeloid_GSEA(sc_mye), format = "file"),
     tar_target(paper_tcell_exhaustion_path, paper_tcell_exhaustion(sc_tcell), format = "file"),

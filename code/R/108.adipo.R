@@ -453,6 +453,80 @@ plot_stromal_markers <- function(sc_adipo, sc_final) {
     # Return the path to results
     return("results/110.adipo/stromal_markers")
 }
+DEG_Car_vs_MSC <- function(sc_adipo) {
+    # Create directory for results
+    dir.create("results/110.adipo/DEG_Car_vs_MSC", showWarnings = FALSE, recursive = TRUE)
+    
+    # Create a new column for cell type and condition combination
+    sc_adipo$cell_type_group <- paste0(sc_adipo$cell_type_dtl, "_", sc_adipo$group)
+    
+    # Filter for only the cell types we're interested in
+    sc_filtered <- sc_adipo[, sc_adipo$cell_type_group %in% c("CAR-like cells_tumor", "MSC_normal")]
+    
+    # Set the identity to the combined cell type and condition
+    Idents(sc_filtered) <- "cell_type_group"
+    
+    # Method 1: MAST
+    message("Running MAST for differential expression between CAR-like cells (tumor) vs MSC (normal)...")
+    deg_mast <- FindMarkers(
+        sc_filtered,
+        ident.1 = "CAR-like cells_tumor",
+        ident.2 = "MSC_normal",
+        test.use = "MAST",
+        min.pct = 0.1,
+        logfc.threshold = 0
+    ) %>%
+        rownames_to_column("gene") %>%
+        as_tibble() %>%
+        filter(p_val_adj < 0.05 & abs(avg_log2FC) > 1) %>%
+        arrange(desc(abs(avg_log2FC)))
+    
+    # Save MAST results
+    write_tsv(
+        deg_mast,
+        "results/110.adipo/DEG_Car_vs_MSC/DEG_CAR_tumor_vs_MSC_normal_MAST.tsv"
+    )
+    
+    # Method 2: Pseudobulk with DESeq2
+    message("Running pseudobulk analysis for differential expression between CAR-like cells (tumor) vs MSC (normal)...")
+    
+    # Create pseudobulk data using AggregateExpression
+    sc_pseudo <- AggregateExpression(
+        sc_filtered,
+        assays = "RNA",
+        return.seurat = TRUE,
+        group.by = c("dataset", "cell_type_group")
+    )
+    
+    # Set identity for comparison
+    Idents(sc_pseudo) <- "cell_type_group"
+    
+    # Run DESeq2 analysis
+    deg_pseudobulk <- FindMarkers(
+        sc_pseudo,
+        ident.1 = "CAR-like cells-tumor",
+        ident.2 = "MSC-normal",
+        test.use = "DESeq2",
+        min.cells.group = 2
+    ) %>%
+        rownames_to_column("gene") %>%
+        as_tibble() %>%
+        filter(p_val_adj < 0.05 & abs(avg_log2FC) > 1) %>%
+        arrange(desc(abs(avg_log2FC)))
+    
+    # Save pseudobulk results
+    write_tsv(
+        deg_pseudobulk,
+        "results/110.adipo/DEG_Car_vs_MSC/DEG_CAR_tumor_vs_MSC_normal_pseudobulk_DESeq2.tsv"
+    )
+    
+    
+    # Return a list with both results
+    return(list(
+        DEG_MAST = deg_mast,
+        DEG_pseudobulk = deg_pseudobulk
+    ))
+}
 adipo_DEG_plot <- function(sc_adipo) {
     # Create directory if it doesn't exist
     dir.create("results/110.adipo/DEG", showWarnings = FALSE, recursive = TRUE)

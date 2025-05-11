@@ -1,3 +1,53 @@
+paper_sub_annotation_adipo <- function(sc_adipo) {
+    # Create UMAP visualization with new annotations
+    p_annotated_clusters <- DimPlot2(sc_adipo,
+        reduction = "adipo_umap",
+        group.by = "cell_type_dtl",
+        label = TRUE
+    ) +
+        ggtitle("Annotated Adipocyte and Stromal cells") +
+        theme(plot.background = element_rect(fill = "white"))
+
+    # Save plot
+    ggsave("results/109.paper/Fig2/dimplot_adipo.tiff", p_annotated_clusters, width = 8, height = 7)
+
+    # Create dotplot of markers by annotated cell types
+    marker_genes <- list(
+        "MSC/Progenitor" = c("MGP", "PDGFRA", "ENG", "CD14", "THY1", "NT5E"),
+        "Pericyte" = c("PDGFRB", "CSPG4", "RGS5", "ACTA2", "MCAM"),
+        "CAR-like" = c("CXCL12", "LEPR", "FOXC1"),
+        # "Negative Markers" = c("PECAM1", "CD34", "PTPRC", "EPCAM"),
+        "Adipocyte" = c("ADIPOQ", "FABP4", "PPARG")
+    )
+
+    # Combine all markers into a single vector
+    all_markers <- unlist(marker_genes)
+    # Generate heatmap of marker expression by subtype
+    toplot <- CalcStats(sc_adipo,
+        features = all_markers,
+        group.by = "cell_type_dtl",
+        method = "zscore",
+        order = "value"
+    )
+
+    gene_groups <- rep(names(marker_genes), lengths(marker_genes)) %>%
+        setNames(marker_genes %>% unlist())
+    gene_groups <- gene_groups[rownames(toplot)]
+
+    p_heatmap <- Heatmap(t(toplot),
+        lab_fill = "zscore",
+        facet_col = gene_groups
+    ) +
+        ggtitle("Stromal cell type marker expression") +
+        theme(plot.background = element_rect(fill = "white"))
+
+    ggsave("results/109.paper/Fig2/heatmap_adipo.tiff",
+        p_heatmap,
+        width = 14, height = 7
+    )
+
+    "results/109.paper/Fig2"
+}
 paper_plot_adipo_distribution <- function(sc_adipo, m_composition_test) {
     dir.create("results/109.paper/Fig2", showWarnings = FALSE, recursive = TRUE)
 

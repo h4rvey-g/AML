@@ -21,19 +21,111 @@ paper_myeloid_annotate <- function(sc_mye) {
 
     p2 <- Heatmap(toplot %>% t(), lab_fill = "zscore", facet_col = gene_groups) +
         theme(plot.background = element_rect(fill = "white"))
-    ggsave("results/109.paper/Fig3/myeloid_annotation_heatmap.tiff", p2, width = 7, height = 5)
-    p <- DotPlot2(sc_mye,
-        features = markers,
+    ggsave("results/109.paper/Fig3/heatmap_myeloid.tiff", p2, width = 9, height = 5)
+    p <- DimPlot2(sc_mye,
+        reduction = "umap_mye",
         group.by = "cell_type_dtl",
-        split.by = "group",
-        split.by.method = "color",
-        split.by.colors = c("#4DBBD5FF", "#E64B35FF"),
-        show_grid = FALSE
+        label = TRUE,
+        repel = TRUE
     ) +
         theme(plot.background = element_rect(fill = "white"))
-    ggsave("results/109.paper/Fig3/myeloid_annotation_dotplot.tiff", p, width = 7, height = 7)
+    ggsave("results/109.paper/Fig3/dimplot_myeloid.tiff", p, width = 7, height = 5)
+    # p <- DotPlot2(sc_mye,
+    #     features = markers,
+    #     group.by = "cell_type_dtl",
+    #     split.by = "group",
+    #     split.by.method = "color",
+    #     split.by.colors = c("#4DBBD5FF", "#E64B35FF"),
+    #     show_grid = FALSE
+    # ) +
+    #     theme(plot.background = element_rect(fill = "white"))
+    # ggsave("results/109.paper/Fig3/myeloid_annotation_dotplot.tiff", p, width = 7, height = 7)
+    "results/109.paper/Fig3"
 }
-
+paper_myeloid_cell_counts <- function(sc_mye) {
+    # Ensure directory exists
+    dir.create("results/109.paper/Fig3", showWarnings = FALSE, recursive = TRUE)
+    
+    # Extract cell type and dataset information
+    cell_data <- data.frame(
+        cell_type = sc_mye$cell_type_dtl,
+        dataset = sc_mye$dataset,
+        group = sc_mye$group,
+        stringsAsFactors = FALSE
+    )
+    
+    # Count cells per cell type per dataset
+    cell_counts <- cell_data %>%
+        group_by(dataset, cell_type, group) %>%
+        summarize(count = n(), .groups = "drop") %>%
+        # Ensure all cell types are present for all datasets (fill with 0)
+        complete(dataset, cell_type, fill = list(count = 0)) %>%
+        # Join back with group information
+        left_join(unique(cell_data[,c("dataset", "group")]), by = "dataset") %>%
+        # Fix the group column issue by using group.y as the definitive group
+        mutate(group = coalesce(group.y, group.x)) %>%
+        select(-group.x, -group.y)  # Remove the redundant columns
+    
+    # Order cell types by their overall abundance
+    cell_type_order <- cell_data %>%
+        dplyr::count(cell_type) %>%
+        arrange(desc(n)) %>%
+        pull(cell_type)
+    
+    cell_counts$cell_type <- factor(cell_counts$cell_type, levels = cell_type_order)
+    
+    # Create the bar plot
+    p <- ggplot(cell_counts, aes(x = dataset, y = count, fill = cell_type)) +
+        geom_bar(stat = "identity", position = "dodge") +
+        facet_grid(. ~ group, scales = "free_x", space = "free") +
+        scale_fill_brewer(palette = "Set2", name = "Cell Type") +
+        labs(
+            title = "Number of Cells per Myeloid Subpopulation by dataset",
+            x = "dataset",
+            y = "Cell Count"
+        ) +
+        theme_bw() +
+        theme(
+            axis.text.x = element_text(angle = 45, hjust = 1, size = 8),
+            legend.position = "right",
+            plot.background = element_rect(fill = "white"),
+            strip.background = element_rect(fill = "lightgrey"),
+            strip.text = element_text(face = "bold")
+        )
+    
+    # Save the plot
+    ggsave("results/109.paper/Fig3/myeloid_cell_counts_per_sample.tiff", p, width = 12, height = 6, dpi = 300)
+    
+    # Create a stacked percentage plot to show relative composition
+    cell_pct <- cell_counts %>%
+        group_by(dataset) %>%
+        mutate(percentage = count / sum(count) * 100) %>%
+        ungroup()
+    
+    p2 <- ggplot(cell_pct, aes(x = dataset, y = percentage, fill = cell_type)) +
+        geom_bar(stat = "identity", position = "stack") +
+        facet_grid(. ~ group, scales = "free_x", space = "free") +
+        scale_fill_brewer(palette = "Set2", name = "Cell Type") +
+        labs(
+            title = "Percentage of Cells per Myeloid Subpopulation by Sample",
+            x = "Sample",
+            y = "Percentage (%)"
+        ) +
+        theme_bw() +
+        theme(
+            axis.text.x = element_text(angle = 45, hjust = 1, size = 8),
+            legend.position = "right",
+            plot.background = element_rect(fill = "white"),
+            strip.background = element_rect(fill = "lightgrey"),
+            strip.text = element_text(face = "bold")
+        )
+    
+    # Save the percentage plot
+    ggsave("results/109.paper/Fig3/myeloid_cell_percentage_per_sample.tiff", p2, width = 12, height = 6, dpi = 300)
+    
+    # Return path to the results
+    return("results/109.paper/Fig3")
+}
 paper_myeloid_lipid_DEG <- function(sc_mye) {
     # markers 按功能分组
     apoe_markers <- list(
@@ -480,113 +572,127 @@ paper_myeloid_GSEA <- function(sc_mye) {
 paper_macrophage_proportion_change <- function(sc_mye) {
     # 确保目录存在
     dir.create("results/109.paper/Fig3", showWarnings = FALSE, recursive = TRUE)
-    
+
     # 筛选所有巨噬细胞类型（APOE_LAM、TREM2_LAM和Tissue-resident_Mac）
     # 按照注释，这些细胞类型都是巨噬细胞亚群
     mac_cells <- WhichCells(sc_mye, expression = cell_type_dtl %in% c("APOE_LAM", "TREM2_LAM", "Tissue-resident_Mac"))
     sc_mac <- subset(sc_mye, cells = mac_cells)
-    
+
     # 计算每个组(正常/肿瘤)中各巨噬细胞亚群的数量和比例
     mac_counts <- table(sc_mac$cell_type_dtl, sc_mac$group)
     mac_props <- prop.table(mac_counts, margin = 2) * 100
-    
+
     # 将数据转换为长格式，便于绘图
     mac_data <- as.data.frame(mac_props)
     colnames(mac_data) <- c("Macrophage_Type", "Condition", "Percentage")
-    
+
     # 确保Macrophage_Type列是因子，设置显示顺序
-    mac_data$Macrophage_Type <- factor(mac_data$Macrophage_Type, 
-                                       levels = c("TREM2_LAM", "APOE_LAM", "Tissue-resident_Mac"))
-    
+    mac_data$Macrophage_Type <- factor(mac_data$Macrophage_Type,
+        levels = c("TREM2_LAM", "APOE_LAM", "Tissue-resident_Mac")
+    )
+
     # 确保正常和肿瘤条件的顺序正确
     mac_data$Condition <- factor(mac_data$Condition, levels = c("normal", "tumor"))
-    
+
     # 绘制堆叠条形图
     p1 <- ggplot(mac_data, aes(x = Condition, y = Percentage, fill = Macrophage_Type)) +
         geom_bar(stat = "identity", position = "stack") +
         scale_fill_brewer(palette = "Set2") +
-        labs(title = "Macrophage Subtype Distribution",
-             x = "Condition", 
-             y = "Percentage (%)", 
-             fill = "Macrophage Type") +
+        labs(
+            title = "Macrophage Subtype Distribution",
+            x = "Condition",
+            y = "Percentage (%)",
+            fill = "Macrophage Type"
+        ) +
         theme_minimal() +
-        theme(plot.background = element_rect(fill = "white"),
-              legend.position = "right",
-              axis.text = element_text(size = 12),
-              axis.title = element_text(size = 14),
-              legend.text = element_text(size = 12),
-              plot.title = element_text(hjust = 0.5, size = 16))
-    
+        theme(
+            plot.background = element_rect(fill = "white"),
+            legend.position = "right",
+            axis.text = element_text(size = 12),
+            axis.title = element_text(size = 14),
+            legend.text = element_text(size = 12),
+            plot.title = element_text(hjust = 0.5, size = 16)
+        )
+
     # 保存堆叠条形图
     ggsave("results/109.paper/Fig3/macrophage_proportion_stacked.tiff", p1, width = 7, height = 5)
-    
+
     # 绘制分组条形图，每种巨噬细胞类型单独显示
     p2 <- ggplot(mac_data, aes(x = Macrophage_Type, y = Percentage, fill = Condition)) +
         geom_bar(stat = "identity", position = "dodge") +
         scale_fill_manual(values = c("normal" = "#4DBBD5FF", "tumor" = "#E64B35FF")) +
-        labs(title = "Macrophage Subtype Changes from Normal to Tumor",
-             x = "Macrophage Type", 
-             y = "Percentage (%)", 
-             fill = "Condition") +
+        labs(
+            title = "Macrophage Subtype Changes from Normal to Tumor",
+            x = "Macrophage Type",
+            y = "Percentage (%)",
+            fill = "Condition"
+        ) +
         theme_minimal() +
-        theme(plot.background = element_rect(fill = "white"),
-              legend.position = "right",
-              axis.text = element_text(size = 12),
-              axis.text.x = element_text(angle = 45, hjust = 1),
-              axis.title = element_text(size = 14),
-              legend.text = element_text(size = 12),
-              plot.title = element_text(hjust = 0.5, size = 16))
-    
+        theme(
+            plot.background = element_rect(fill = "white"),
+            legend.position = "right",
+            axis.text = element_text(size = 12),
+            axis.text.x = element_text(angle = 45, hjust = 1),
+            axis.title = element_text(size = 14),
+            legend.text = element_text(size = 12),
+            plot.title = element_text(hjust = 0.5, size = 16)
+        )
+
     # 保存分组条形图
     ggsave("results/109.paper/Fig3/macrophage_proportion_grouped.tiff", p2, width = 7, height = 5)
-    
+
     # 计算每种巨噬细胞在肿瘤与正常组之间的变化倍数
     fold_change <- mac_props[, "tumor"] / mac_props[, "normal"]
     fc_data <- data.frame(
         Macrophage_Type = names(fold_change),
         FoldChange = as.numeric(fold_change)
     )
-    fc_data$Macrophage_Type <- factor(fc_data$Macrophage_Type, 
-                                     levels = c("TREM2_LAM", "APOE_LAM", "Tissue-resident_Mac"))
-    
+    fc_data$Macrophage_Type <- factor(fc_data$Macrophage_Type,
+        levels = c("TREM2_LAM", "APOE_LAM", "Tissue-resident_Mac")
+    )
+
     # 绘制倍数变化条形图
     p3 <- ggplot(fc_data, aes(x = Macrophage_Type, y = FoldChange, fill = Macrophage_Type)) +
         geom_bar(stat = "identity") +
         geom_hline(yintercept = 1, linetype = "dashed", color = "darkgray") +
         scale_fill_brewer(palette = "Set2") +
-        labs(title = "Fold Change in Macrophage Proportions (Tumor/Normal)",
-             x = "Macrophage Type", 
-             y = "Fold Change", 
-             fill = "Macrophage Type") +
+        labs(
+            title = "Fold Change in Macrophage Proportions (Tumor/Normal)",
+            x = "Macrophage Type",
+            y = "Fold Change",
+            fill = "Macrophage Type"
+        ) +
         theme_minimal() +
-        theme(plot.background = element_rect(fill = "white"),
-              legend.position = "right",
-              axis.text = element_text(size = 12),
-              axis.text.x = element_text(angle = 45, hjust = 1),
-              axis.title = element_text(size = 14),
-              legend.text = element_text(size = 12),
-              plot.title = element_text(hjust = 0.5, size = 16))
-    
+        theme(
+            plot.background = element_rect(fill = "white"),
+            legend.position = "right",
+            axis.text = element_text(size = 12),
+            axis.text.x = element_text(angle = 45, hjust = 1),
+            axis.title = element_text(size = 14),
+            legend.text = element_text(size = 12),
+            plot.title = element_text(hjust = 0.5, size = 16)
+        )
+
     # 保存倍数变化条形图
     ggsave("results/109.paper/Fig3/macrophage_proportion_foldchange.tiff", p3, width = 7, height = 5)
-    
+
     # 统计检验：比较正常和肿瘤样本中巨噬细胞亚型比例的差异
     # 使用卡方检验比较巨噬细胞亚型在正常和肿瘤之间的分布差异
     chisq_result <- chisq.test(mac_counts)
-    
+
     # 保存检验结果
     sink("results/109.paper/Fig3/macrophage_proportion_stats.txt")
     cat("Chi-square test for macrophage subtype distribution between normal and tumor:\n")
     print(chisq_result)
-    
+
     # 添加每种巨噬细胞类型的百分比信息
     cat("\nPercentage of macrophage subtypes:\n")
     print(mac_props)
-    
+
     # 添加倍数变化信息
     cat("\nFold change (tumor/normal):\n")
     print(fold_change)
     sink()
-    
+
     "results/109.paper/Fig3"
 }
