@@ -116,3 +116,132 @@ paper_plot_adipo_distribution <- function(sc_adipo, m_composition_test) {
 
     return("results/109.paper/Fig2")
 }
+paper_plot_DEG_Car_vs_MSC <- function(DEG_res) {
+    # Create directory for results
+    dir.create("results/109.paper/Fig2", showWarnings = FALSE, recursive = TRUE)
+    
+    # Get DEG results from pseudobulk analysis
+    DEG_pseudobulk <- DEG_res$DEG_pseudobulk
+    
+    # Define genes to highlight with their corresponding categories
+    highlight_genes <- list(
+        # CAR-like cell markers (Myelolipoma)
+        "CAR-like markers" = c("LEPR", "CXCL12", "THY1", "VCAM1"),
+        # Adipogenesis markers
+        "Adipogenesis" = c("PPARG", "LPL", "CFD"),
+        # ECM and stromal support
+        "Stromal/ECM" = c("COL1A1", "FBN1", "PTX3", "GAS6", "ANGPT1"),
+        # Hematopoietic factors
+        "Hematopoiesis" = c("RUNX1", "IKZF1"),
+        # Normal adrenal MSC markers
+        "Adrenal MSC" = c("NR2F1", "NR2F1-AS1", "HHIP", "PTCH1", "RSPO3", "MEG3", "PDGFRA")
+    )
+    
+    # Combine all genes into a single vector
+    all_genes_to_highlight <- unlist(highlight_genes)
+    
+    # Filter DEG results to include only our specified genes
+    highlight_degs <- DEG_pseudobulk %>%
+        filter(gene %in% all_genes_to_highlight)
+    
+    # Create a category column for the genes
+    highlight_degs <- highlight_degs %>%
+        mutate(category = sapply(gene, function(g) {
+            for(cat_name in names(highlight_genes)) {
+                if(g %in% highlight_genes[[cat_name]]) return(cat_name)
+            }
+            return("Other")
+        }))
+    
+    # Assign direction (up in CAR-like or up in MSC)
+    highlight_degs <- highlight_degs %>%
+        mutate(direction = ifelse(avg_log2FC > 0, "Up in CAR-like cells", "Up in MSC"))
+    
+    # Create enhanced volcano plot with category-based legend
+    # Create a volcano plot using ggplot2
+    p_volcano <- ggplot(highlight_degs, aes(x = avg_log2FC, y = -log10(p_val_adj))) +
+        geom_point(aes(color = category), size = 3, alpha = 0.8) +
+        geom_hline(yintercept = -log10(0.05), linetype = "dashed", color = "gray50") +
+        geom_vline(xintercept = c(-1, 1), linetype = "dashed", color = "gray50") +
+        scale_color_manual(values = c(
+            "CAR-like markers" = "#E41A1C", 
+            "Adipogenesis" = "#377EB8", 
+            "Stromal/ECM" = "#4DAF4A", 
+            "Hematopoiesis" = "#984EA3", 
+            "Adrenal MSC" = "#FF7F00"
+        )) +
+        geom_text_repel(
+            aes(label = gene, color = category),
+            box.padding = 0.5,
+            point.padding = 0.3,
+            segment.color = "grey50",
+            segment.size = 0.5,
+            force = 2,
+            max.overlaps = 30
+        ) +
+        labs(
+            title = "DEG: CAR-like cells (Tumor) vs MSC (Normal)",
+            subtitle = "Pseudobulk DESeq2 analysis",
+            x = "Log2 Fold Change",
+            y = "-Log10 Adjusted P-value",
+            color = "Gene Category"
+        ) +
+        theme_bw() +
+        theme(
+            plot.background = element_rect(fill = "white"),
+            legend.position = "right",
+            panel.grid.major = element_line(color = "grey90"),
+            panel.grid.minor = element_blank()
+        )
+    
+    # Save the volcano plot
+    ggsave("results/109.paper/Fig2/CAR_vs_MSC_volcano_plot.tiff", 
+           p_volcano, 
+           width = 10, height = 8)
+    
+    # Create a lollipop plot
+    # Prepare the data
+    lollipop_data <- highlight_degs %>%
+        arrange(category, avg_log2FC)
+    
+    # Set factor levels for proper ordering
+    lollipop_data$gene <- factor(lollipop_data$gene, levels = lollipop_data$gene)
+    
+    # Create lollipop plot with faceting by gene category
+    p_lollipop <- ggplot(lollipop_data, aes(x = avg_log2FC, y = gene, color = category)) +
+        geom_segment(aes(x = 0, xend = avg_log2FC, y = gene, yend = gene, 
+            color = category), size = 1.5) +
+        geom_point(aes(size = -log10(p_val_adj))) +
+        facet_grid(category ~ ., scales = "free_y", space = "free") +
+        scale_color_manual(values = c(
+            "CAR-like markers" = "#E41A1C", 
+            "Adipogenesis" = "#377EB8", 
+            "Stromal/ECM" = "#4DAF4A", 
+            "Hematopoiesis" = "#984EA3", 
+            "Adrenal MSC" = "#FF7F00"
+        )) +
+        scale_size_continuous(range = c(3, 8), name = "-log10(p-adj)") +
+        geom_vline(xintercept = 0, linetype = "dashed", color = "grey50") +
+        labs(
+            title = "Differential Expression: CAR-like cells (Tumor) vs MSC (Normal)",
+            x = "Log2 Fold Change",
+            y = "",
+            color = "Gene Category"
+        ) +
+        theme_bw() +
+        theme(
+            plot.background = element_rect(fill = "white"),
+            panel.grid.major.y = element_blank(),
+            panel.grid.minor = element_blank(),
+            legend.position = "right",
+            strip.background = element_rect(fill = "grey90"),
+            strip.text = element_text(face = "bold")
+        )
+    
+    # Save the lollipop plot
+    ggsave("results/109.paper/Fig2/CAR_vs_MSC_lollipop_plot.tiff", 
+           p_lollipop, 
+           width = 10, height = 12)
+    # Return the file paths to the generated figures
+    "results/109.paper/Fig2"
+}

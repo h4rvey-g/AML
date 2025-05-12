@@ -91,6 +91,7 @@ list(
     tar_target(paper_sub_annotation_adipo_path, paper_sub_annotation_adipo(sc_adipo), format = "file"),
     tar_target(paper_cell_distribution_path, paper_cell_distribution(sc_final), format = "file"),
     tar_target(paper_adipo_distribution_path, paper_plot_adipo_distribution(sc_adipo, adipo_composition_test), format = "file"),
+    tar_target(paper_plot_DEG_Car_vs_MSC_path, paper_plot_DEG_Car_vs_MSC(DEG_Car_vs_MSC_res), format = "file"),
     tar_target(paper_clc_expression_by_sample_path, paper_clc_expression_by_sample(sc_final), format = "file"),
     tar_target(paper_myeloid_annotate_path, paper_myeloid_annotate(sc_mye), format = "file"),
     tar_target(paper_myeloid_cell_counts_path, paper_myeloid_cell_counts(sc_mye), format = "file"),
