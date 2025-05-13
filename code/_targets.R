@@ -55,6 +55,7 @@ list(
         GeneSetAnalysisGO() %>% names()
     }),
     tar_target(cell_communication_path, cell_communication(sc_final)),
+    tar_target(check_endo_markers_res, check_endo_markers(sc_final)),
     tar_target(sc_mye_clust, sub_cluster_myeloid(sc_final)),
     tar_target(sc_mye_annotation, sub_annotation_myeloid(sc_mye_clust, sc_final)),
     tar_target(sc_mye, myeloid_annotate(sc_mye_annotation)),

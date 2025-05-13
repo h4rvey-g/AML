@@ -1168,3 +1168,74 @@ compare_neural_clc <- function(sc_int) {
 
     "results/102.cluster_annotate/neural_vs_clc"
 }
+check_endo_markers <- function(sc_int) {
+    # Define endothelial markers to check
+    endo_markers <- c("CD34", "CD59", "THY1", "CD38", "KIT", "LIN28A", "LIN28B") # KIT is c-Kit, THY1 is CD90
+
+    # Create directory for results
+    dir.create("results/102.cluster_annotate/endo_markers", showWarnings = FALSE, recursive = TRUE)
+
+    # Filter for Endo cells
+    sc_endo <- sc_int %>% filter(cell_type_dtl == "Endo")
+
+    if (nrow(sc_endo@meta.data) == 0) {
+        message("No Endo cells found in the dataset")
+        return(NULL)
+    }
+
+    # Calculate expression statistics
+    endo_expr <- CalcStats(sc_int,
+        features = endo_markers,
+        method = "zscore",
+        order = "value"
+    )
+
+    # Create a heatmap of percent expression
+    p_pct <- Heatmap(endo_expr, lab_fill = "zscore") +
+        theme(plot.background = element_rect(fill = "white"))
+    ggsave("results/102.cluster_annotate/endo_markers/endo_markers_zscore.png", p_pct, width = 8, height = 6)
+
+    # Create violin plots for each marker
+    p_vln <- VlnPlot2(sc_endo, 
+              features = endo_markers,
+              group.by = "group", 
+              ncol = 3, 
+              pt.size = 0.1,
+              pt.style = "quasirandom",
+              box = TRUE,
+              show.mean = TRUE,
+              stat.method = "wilcox.test") +
+            theme(plot.background = element_rect(fill = "white"))
+    ggsave("results/102.cluster_annotate/endo_markers/endo_markers_violin.png", p_vln, width = 12, height = 8)
+
+    # Also create a violin plot for all cells grouped by cell type to see expression across all cell types
+    p_vln_all <- VlnPlot2(sc_int, 
+              features = endo_markers,
+              group.by = "cell_type_dtl", 
+              ncol = 3, 
+              pt.size = 0.1,
+              pt = FALSE,
+              box = TRUE,
+              show.mean = TRUE) +
+            theme(plot.background = element_rect(fill = "white"),
+                  axis.text.x = element_text(angle = 45, hjust = 1))
+    ggsave("results/102.cluster_annotate/endo_markers/all_celltypes_endo_markers_violin.png", p_vln_all, width = 18, height = 10)
+
+    # Compare expression between normal and tumor Endo cells
+    sc_endo$sample_group <- paste(sc_endo$group, "Endo")
+
+    # Create a dotplot showing expression in normal vs tumor Endo cells
+    p_dot <- DotPlot2(sc_endo,
+        features = endo_markers,
+        group.by = "sample_group",
+        show_grid = FALSE
+    ) +
+        theme(
+            plot.background = element_rect(fill = "white"),
+            axis.text.x = element_text(angle = 45, hjust = 1)
+        )
+    ggsave("results/102.cluster_annotate/endo_markers/endo_markers_normal_vs_tumor.png", p_dot, width = 8, height = 5)
+
+    # Return expression statistics
+    return(endo_expr)
+}
