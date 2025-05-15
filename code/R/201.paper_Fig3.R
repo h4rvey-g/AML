@@ -95,7 +95,18 @@ paper_myeloid_cell_counts <- function(sc_mye) {
     
     # Save the plot
     ggsave("results/109.paper/Fig3/myeloid_cell_counts_per_sample.tiff", p, width = 12, height = 6, dpi = 300)
+    # Save cell counts to TSV file - grouped by group and cell_type
+    cell_counts_summary <- cell_counts %>%
+        group_by(group, cell_type) %>%
+        summarize(total_count = sum(count), .groups = "drop") %>%
+        arrange(group, desc(total_count))
     
+    write.table(cell_counts_summary, 
+                file = "results/109.paper/Fig3/myeloid_cell_counts_summary.tsv", 
+                sep = "\t", 
+                row.names = FALSE, 
+                quote = FALSE)
+
     # Create a stacked percentage plot to show relative composition
     cell_pct <- cell_counts %>%
         group_by(dataset) %>%

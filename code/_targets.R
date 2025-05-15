@@ -11,7 +11,8 @@ tar_source(c(
     "code/R/102.cluster_annotate copy.R",
     "code/R/201.paper_Fig1.R",
     "code/R/201.paper_Fig2.R",
-    "code/R/201.paper_Fig3.R"
+    "code/R/201.paper_Fig3.R",
+    "code/R/201.paper_Fig4.R"
 ))
 tar_option_set(
     tidy_eval = FALSE,
@@ -98,6 +99,8 @@ list(
     tar_target(paper_myeloid_cell_counts_path, paper_myeloid_cell_counts(sc_mye), format = "file"),
     tar_target(paper_myeloid_lipid_DEG_path, paper_myeloid_lipid_DEG(sc_mye), format = "file"),
     tar_target(paper_myeloid_GSEA_path, paper_myeloid_GSEA(sc_mye), format = "file"),
+    tar_target(paper_tcell_annotate_path, paper_tcell_annotate(sc_tcell), format = "file"),
+    tar_target(compare_tcell_bcell_counts_path, compare_tcell_bcell_counts(sc_final, sc_tcell), format = "file"),
     tar_target(paper_tcell_exhaustion_path, paper_tcell_exhaustion(sc_tcell), format = "file"),
     tar_target(paper_tcell_fate_DEG_path, paper_tcell_fate_DEG(sc_tcell), format = "file"),
     tar_target(paper_TREM2_LAM_violin_path, paper_TREM2_LAM_violin(sc_mye), format = "file"),
