@@ -1,6 +1,7 @@
-paper_tcell_annotate <- function(sc_tcell) {
+paper_tcell_annotate <- function(sc_tcell, sc_final) {
     # Create directory if it doesn't exist
     dir.create("results/109.paper/Fig4", showWarnings = FALSE, recursive = TRUE)
+    # First plot the T cell UMAP
     p <- DimPlot2(sc_tcell,
         reduction = "umap_tcell",
         group.by = "cell_type_dtl",
@@ -10,6 +11,68 @@ paper_tcell_annotate <- function(sc_tcell) {
         theme(plot.background = element_rect(fill = "white"))
     ggsave("results/109.paper/Fig4/dimplot_tcell.tiff", p, width = 7, height = 5)
 
+    # Transfer T cell annotations back to sc_final
+    # Create a mapping from barcodes to cell_type_dtl in sc_tcell
+    tcell_annotations <- data.frame(
+        barcode = colnames(sc_tcell),
+        tcell_subtype = sc_tcell$cell_type_dtl,
+        stringsAsFactors = FALSE
+    )
+
+    # Filter sc_final for T cells and B cells
+    sc_tb <- sc_final[, grepl("^Tcell|^Bcell", sc_final$cell_type)]
+
+    # Add T cell subtypes to sc_tb
+    sc_tb$detailed_celltype <- sc_tb$cell_type_dtl
+    sc_tb$detailed_celltype[colnames(sc_tb) %in% tcell_annotations$barcode] <-
+        tcell_annotations$tcell_subtype[match(
+            colnames(sc_tb)[colnames(sc_tb) %in% tcell_annotations$barcode],
+            tcell_annotations$barcode
+        )]
+
+    # Run UMAP on T and B cells if not already available
+    if (!"umap_tb" %in% names(sc_tb@reductions)) {
+        sc_tb <- RunUMAP(sc_tb, reduction = "scvi", dims = 1:30, reduction.name = "umap_tb")
+    }
+
+    # Plot the combined T and B cell UMAP
+    p_tb <- DimPlot2(sc_tb,
+        reduction = "umap_tb",
+        group.by = "detailed_celltype",
+        label = TRUE,
+        repel = TRUE
+    ) +
+        labs(title = "T and B cell subtypes") +
+        theme(plot.background = element_rect(fill = "white"))
+    ggsave("results/109.paper/Fig4/dimplot_tcell_bcell.tiff", p_tb, width = 10, height = 8)
+
+    markers <- list(
+        "B cell" = c("MS4A1", "CD79A", "CD19"),
+        "T cell" = c("CD3D", "CD3E"),
+        "CD4/8" = c("CD4", "CD8A", "CD8B"),
+        "gdT_1" = c("TRDV1"),
+        "gdT_2" = c("TRDV2"),
+        "gdT_constant" = c("TRGC1", "TRGC2", "TRDC")
+    )
+    sc_tb <- sc_tb %>%
+        mutate(cell_type_dtl_tb = case_when(
+            grepl("CD4", detailed_celltype) ~ "CD4_Tcell",
+            grepl("CD8", detailed_celltype) ~ "CD8_Tcell",
+            TRUE ~ detailed_celltype
+        ))
+    toplot_DN <- CalcStats(
+        sc_tb,
+        features = markers %>% unlist(),
+        method = "zscore", order = "value", group.by = "cell_type_dtl_tb"
+    )
+    gene_groups_DN <- rep(names(markers), lengths(markers)) %>%
+        setNames(markers %>% unlist()) %>%
+        .[rownames(toplot_DN)] %>%
+        factor(levels = unique(rep(names(markers), lengths(markers))))
+    p3 <- Heatmap(toplot_DN %>% t(), lab_fill = "zscore", facet_col = gene_groups_DN) +
+        labs(title = "CD4+, CD8+, DN T Cell Subtypes (z-score)") +
+        theme(plot.background = element_rect(fill = "white"))
+    ggsave("results/109.paper/Fig4/heatmap_broad_tcell.tiff", p3, width = 15, height = 8)
     markers <- list(
         "proliferation" = c("MKI67"),
         "Tex" = c("SRGN", "DUSP4"),
@@ -21,11 +84,11 @@ paper_tcell_annotate <- function(sc_tcell) {
     )
     # calculate for CD4, CD8, and DN separately
     toplot_CD4 <- CalcStats(
-        sc_tcell %>%
+        sc_tb %>%
             # filter cell_type_dtl starts with CD4
-            filter(grepl("^CD4", cell_type_dtl)),
+            filter(grepl("^CD4", detailed_celltype)),
         features = markers %>% unlist(),
-        method = "zscore", order = "value", group.by = "cell_type_dtl"
+        method = "zscore", order = "value", group.by = "detailed_celltype"
     )
 
     gene_groups_CD4 <- rep(names(markers), lengths(markers)) %>%
@@ -46,11 +109,11 @@ paper_tcell_annotate <- function(sc_tcell) {
         "Tn" = c("LEF1", "SELL", "TCF7", "CCR7")
     )
     toplot_CD8 <- CalcStats(
-        sc_tcell %>%
+        sc_tb %>%
             # filter cell_type_dtl starts with CD4
-            filter(grepl("^CD8", cell_type_dtl)),
+            filter(grepl("^CD8", detailed_celltype)),
         features = markers %>% unlist(),
-        method = "zscore", order = "value", group.by = "cell_type_dtl"
+        method = "zscore", order = "value", group.by = "detailed_celltype"
     )
 
     gene_groups_CD8 <- rep(names(markers), lengths(markers)) %>%
@@ -61,55 +124,6 @@ paper_tcell_annotate <- function(sc_tcell) {
         labs(title = "CD8 T Cell Subtypes") +
         theme(plot.background = element_rect(fill = "white"))
     ggsave("results/109.paper/Fig4/heatmap_CD8_tcell.tiff", p2, width = 15, height = 8)
-
-    markers <- list(
-        # "CD3" = c("CD3D", "CD3E"),
-        "CD4/8" = c("CD4", "CD8A", "CD8B"),
-        "gdT_1" = c("TRDV1"),
-        "gdT_2" = c("TRDV2"),
-        "gdT_constant" = c("TRGC1", "TRGC2", "TRDC")
-    )
-    sc_tcell <- sc_tcell %>%
-        mutate(cell_type_dtl_DN = case_when(
-            grepl("CD4", cell_type_dtl) ~ "CD4_Tcell",
-            grepl("CD8", cell_type_dtl) ~ "CD8_Tcell",
-            TRUE ~ cell_type_dtl
-        ))
-    toplot_DN <- CalcStats(
-        sc_tcell,
-        features = markers %>% unlist(),
-        method = "zscore", order = "value", group.by = "cell_type_dtl_DN"
-    )
-    gene_groups_DN <- rep(names(markers), lengths(markers)) %>%
-        setNames(markers %>% unlist()) %>%
-        .[rownames(toplot_DN)] %>%
-        factor(levels = unique(rep(names(markers), lengths(markers))))
-    p3 <- Heatmap(toplot_DN %>% t(), lab_fill = "zscore", facet_col = gene_groups_DN) +
-        labs(title = "CD4+, CD8+, DN T Cell Subtypes (z-score)") +
-        theme(plot.background = element_rect(fill = "white"))
-    ggsave("results/109.paper/Fig4/heatmap_broad_tcell.tiff", p3, width = 15, height = 8)
-
-    markers <- list(
-        "CD3" = c("CD3D", "CD3E"),
-        "CD4/8" = c("CD4", "CD8A", "CD8B"),
-        "gdT_1" = c("TRDV1"),
-        "gdT_2" = c("TRDV2"),
-        "gdT_constant" = c("TRGC1", "TRGC2", "TRDC")
-    )
-    # Creating the same plot but with mean values
-    toplot_DN_mean <- CalcStats(
-        sc_tcell,
-        features = markers %>% unlist(),
-        method = "mean", group.by = "cell_type_dtl_DN"
-    )
-    gene_groups_DN <- rep(names(markers), lengths(markers)) %>%
-        setNames(markers %>% unlist()) %>%
-        .[rownames(toplot_DN_mean)] %>%
-        factor(levels = unique(rep(names(markers), lengths(markers))))
-    p3_mean <- Heatmap(toplot_DN_mean %>% t(), lab_fill = "mean expression", facet_col = gene_groups_DN) +
-        labs(title = "CD4+, CD8+, DN T Cell Subtypes (mean expression)") +
-        theme(plot.background = element_rect(fill = "white"))
-    ggsave("results/109.paper/Fig4/heatmap_broad_tcell_mean.tiff", p3_mean, width = 15, height = 8)
 
     p <- p1 +
         p2 +
@@ -137,15 +151,21 @@ compare_tcell_bcell_counts <- function(sc_final, sc_tcell) {
         stringsAsFactors = FALSE
     )
 
+    # Get total cell counts per sample (for all cells, not just T and B cells)
+    total_cells_per_sample <- cell_counts %>%
+        group_by(sample) %>%
+        summarize(total_cells = n(), .groups = "drop")
+
     # Filter to only include T cells and B cells
-    cell_counts <- cell_counts %>%
+    cell_counts_tb <- cell_counts %>%
         filter(grepl("^Tcell|^Bcell", cell_type_dtl))
 
     # Summarize T and B cell counts
-    broad_cell_summary <- cell_counts %>%
+    broad_cell_summary <- cell_counts_tb %>%
         group_by(sample, cell_type_dtl) %>%
         summarize(count = n(), .groups = "drop") %>%
-        mutate(percentage = count / sum(count) * 100, .by = sample) %>%
+        left_join(total_cells_per_sample, by = "sample") %>%
+        mutate(percentage = count / total_cells * 100) %>%
         arrange(sample, desc(count))
 
     # Write detailed T and B cell type information to TSV
@@ -166,7 +186,7 @@ compare_tcell_bcell_counts <- function(sc_final, sc_tcell) {
         labs(
             title = "Broad cell type distribution by tumor sample",
             x = "Sample",
-            y = "Percentage (%)",
+            y = "Percentage of all cells (%)",
             fill = "Cell type"
         ) +
         theme_minimal() +
@@ -192,9 +212,12 @@ compare_tcell_bcell_counts <- function(sc_final, sc_tcell) {
     cell_tb_summary <- cell_counts %>%
         group_by(sample) %>%
         summarize(
-            total_cells = n(),
             t_cells = sum(grepl(t_cell_pattern, cell_type_dtl)),
             b_cells = sum(grepl(b_cell_pattern, cell_type_dtl)),
+            total_cells = n(),
+            .groups = "drop"
+        ) %>%
+        mutate(
             t_cell_percent = t_cells / total_cells * 100,
             b_cell_percent = b_cells / total_cells * 100
         ) %>%
@@ -239,10 +262,10 @@ compare_tcell_bcell_counts <- function(sc_final, sc_tcell) {
     # Third part: T cell subtypes from sc_tcell
     # Get T cell barcodes from sc_final to match with sc_tcell
     t_cell_barcodes <- colnames(sc_tumor)[grepl(t_cell_pattern, sc_tumor$cell_type)]
-    
+
     # Filter sc_tcell to include only T cells from tumor samples
     sc_tcell_tumor <- sc_tcell[, colnames(sc_tcell) %in% t_cell_barcodes]
-    
+
     # Create a data frame with sample and T cell subtypes
     t_cell_subtypes_df <- data.frame(
         sample = sc_tcell_tumor$orig.ident,
@@ -254,7 +277,8 @@ compare_tcell_bcell_counts <- function(sc_final, sc_tcell) {
     t_cell_subtypes <- t_cell_subtypes_df %>%
         group_by(sample, cell_type_dtl) %>%
         summarize(count = n(), .groups = "drop") %>%
-        mutate(percentage = count / sum(count) * 100, .by = sample) %>%
+        left_join(total_cells_per_sample, by = "sample") %>%
+        mutate(percentage = count / total_cells * 100) %>%
         arrange(sample, desc(count))
 
     # Write detailed T cell subtype information to TSV
@@ -275,7 +299,7 @@ compare_tcell_bcell_counts <- function(sc_final, sc_tcell) {
         labs(
             title = "T cell subtype distribution by tumor sample",
             x = "Sample",
-            y = "Percentage (%)",
+            y = "Percentage of all cells (%)",
             fill = "T cell subtype"
         ) +
         theme_minimal() +
@@ -294,7 +318,7 @@ compare_tcell_bcell_counts <- function(sc_final, sc_tcell) {
 
     # Combine all plots
     combined_plot <- p_broad / p1 / p_tcell_subtypes + plot_layout(ncol = 1, heights = c(1, 0.8, 1))
-    
+
     # Save combined plot
     ggsave("results/109.paper/Fig4/cell_type_distribution_combined.tiff",
         combined_plot,
