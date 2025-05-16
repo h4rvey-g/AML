@@ -1,0 +1,24 @@
+group	cell_type_dtl	cell_count
+normal	Adipo	31
+normal	CAR-like cells	207
+normal	CLC	464
+normal	Endo	5835
+normal	LEC	544
+normal	MSC	6879
+normal	Myeloid	4583
+normal	PSC	557
+normal	Plasma	47
+normal	Tcell	880
+normal	ZF	23287
+normal	ZG	5518
+normal	ZR	9962
+tumor	Adipo	2403
+tumor	Bcell	4120
+tumor	CAR-like cells	2375
+tumor	Endo	1318
+tumor	MSC	21
+tumor	Myeloid	5068
+tumor	Neural-like	2452
+tumor	PSC	43
+tumor	Plasma	581
+tumor	Tcell	7400

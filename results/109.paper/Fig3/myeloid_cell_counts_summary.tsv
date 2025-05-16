@@ -1,0 +1,15 @@
+group	cell_type	total_count
+normal	TREM2_LAM	1636
+normal	Tissue-resident_Mac	1278
+normal	DC	735
+normal	APOE_LAM	398
+normal	Mast	366
+normal	Eosinophil	169
+normal	Eryth	1
+tumor	Tissue-resident_Mac	1317
+tumor	DC	1293
+tumor	Mast	904
+tumor	Eosinophil	787
+tumor	TREM2_LAM	428
+tumor	Eryth	335
+tumor	APOE_LAM	4

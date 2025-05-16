@@ -1,0 +1,16 @@
+cluster	cell_type	cell_type_dtl
+1	Steroidogenic	Steroidogenic
+2	Steroidogenic	Steroidogenic
+4	Steroidogenic	Steroidogenic
+15	Steroidogenic	Steroidogenic
+5	Tcell	Tcell
+3	Myeloid	Myeloid
+6	Endo	Endo
+7	Plasticity	PSC
+10	CLC	CLC
+9	Bcell	Bcell
+11	Plasticity	Adipo
+8	Plasticity	Fib
+13	LEC	LEC
+12	Plasma	Plasma
+14	Eryth	Eryth

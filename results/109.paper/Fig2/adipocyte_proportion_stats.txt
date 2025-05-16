@@ -1,0 +1,9 @@
+Fisher's Exact Test for adipocyte proportion between normal and tumor:
+p-value: <2e-16
+odds ratio: 0.0041
+
+Adipocyte proportion:
+  Normal: 0.4%
+  Tumor: 49.63%
+
+Fold change (tumor/normal): 122.8539
