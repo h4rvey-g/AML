@@ -9,7 +9,7 @@ paper_tcell_annotate <- function(sc_tcell, sc_final) {
         repel = TRUE
     ) +
         theme(plot.background = element_rect(fill = "white"))
-    ggsave("results/109.paper/Fig4/dimplot_tcell.tiff", p, width = 7, height = 5)
+    ggsave("results/109.paper/Fig4/dimplot_tcell.tiff", p, width = 7, height = 5, compression = "lzw+p")
 
     # Transfer T cell annotations back to sc_final
     # Create a mapping from barcodes to cell_type_dtl in sc_tcell
@@ -44,7 +44,7 @@ paper_tcell_annotate <- function(sc_tcell, sc_final) {
     ) +
         labs(title = "T and B cell subtypes") +
         theme(plot.background = element_rect(fill = "white"))
-    ggsave("results/109.paper/Fig4/dimplot_tcell_bcell.tiff", p_tb, width = 10, height = 8)
+    ggsave("results/109.paper/Fig4/dimplot_tcell_bcell.tiff", p_tb, width = 10, height = 8, compression = "lzw+p")
 
     markers <- list(
         "B cell" = c("MS4A1", "CD79A", "CD19"),
@@ -72,7 +72,7 @@ paper_tcell_annotate <- function(sc_tcell, sc_final) {
     p3 <- Heatmap(toplot_DN %>% t(), lab_fill = "zscore", facet_col = gene_groups_DN) +
         labs(title = "CD4+, CD8+, DN T Cell Subtypes (z-score)") +
         theme(plot.background = element_rect(fill = "white"))
-    ggsave("results/109.paper/Fig4/heatmap_broad_tcell.tiff", p3, width = 15, height = 8)
+    ggsave("results/109.paper/Fig4/heatmap_broad_tcell.tiff", p3, width = 15, height = 8, compression = "lzw+p")
     markers <- list(
         "proliferation" = c("MKI67"),
         "Tex" = c("SRGN", "DUSP4"),
@@ -98,7 +98,7 @@ paper_tcell_annotate <- function(sc_tcell, sc_final) {
     p1 <- Heatmap(toplot_CD4 %>% t(), lab_fill = "zscore", facet_col = gene_groups_CD4, text.size = 5) +
         labs(title = "CD4 T Cell Subtypes") +
         theme(plot.background = element_rect(fill = "white"))
-    ggsave("results/109.paper/Fig4/heatmap_CD4_tcell.tiff", p1, width = 15, height = 8)
+    ggsave("results/109.paper/Fig4/heatmap_CD4_tcell.tiff", p1, width = 15, height = 8, compression = "lzw+p")
 
     markers <- list(
         "proliferation" = c("MKI67", "HMGB2", "HMGB1"),
@@ -123,31 +123,25 @@ paper_tcell_annotate <- function(sc_tcell, sc_final) {
     p2 <- Heatmap(toplot_CD8 %>% t(), lab_fill = "zscore", facet_col = gene_groups_CD8, text.size = 5) +
         labs(title = "CD8 T Cell Subtypes") +
         theme(plot.background = element_rect(fill = "white"))
-    ggsave("results/109.paper/Fig4/heatmap_CD8_tcell.tiff", p2, width = 15, height = 8)
+    ggsave("results/109.paper/Fig4/heatmap_CD8_tcell.tiff", p2, width = 15, height = 8, compression = "lzw+p")
 
     p <- p1 +
         p2 +
         plot_layout(ncol = 1)
-    ggsave("results/109.paper/Fig4/heatmap_combined_tcell.tiff", p, width = 15, height = 15)
+    ggsave("results/109.paper/Fig4/heatmap_combined_tcell.tiff", p, width = 15, height = 15, compression = "lzw+p")
     "results/109.paper/Fig4"
 }
 compare_tcell_bcell_counts <- function(sc_final, sc_tcell) {
     # Create directory if it doesn't exist
     dir.create("results/109.paper/Fig4", showWarnings = FALSE, recursive = TRUE)
 
-    # Filter for tumor samples (orig.ident starts with T)
-    sc_tumor <- sc_final[, grepl("^T", sc_final$orig.ident)]
-
-    # Check if we have tumor samples
-    if (ncol(sc_tumor) == 0) {
-        message("No tumor samples found with orig.ident starting with 'T'")
-        return(NULL)
-    }
+    # Use all samples instead of filtering for tumor only
+    sc_all <- sc_final
 
     # First part: Analyze Tcell and Bcell distribution in sc_final
     cell_counts <- data.frame(
-        sample = sc_tumor$orig.ident,
-        cell_type_dtl = sc_tumor$cell_type_dtl,
+        sample = sc_all$orig.ident,
+        cell_type_dtl = sc_all$cell_type_dtl,
         stringsAsFactors = FALSE
     )
 
@@ -184,7 +178,7 @@ compare_tcell_bcell_counts <- function(sc_final, sc_tcell) {
             stat = "identity"
         ) +
         labs(
-            title = "Broad cell type distribution by tumor sample",
+            title = "Broad cell type distribution across all samples",
             x = "Sample",
             y = "Percentage of all cells (%)",
             fill = "Cell type"
@@ -200,7 +194,7 @@ compare_tcell_bcell_counts <- function(sc_final, sc_tcell) {
     ggsave("results/109.paper/Fig4/broad_cell_types_distribution.tiff",
         p_broad,
         width = 12,
-        height = 8
+        height = 8, compression = "lzw+p"
     )
 
     # Second part: Focus specifically on T cells and B cells
@@ -244,7 +238,7 @@ compare_tcell_bcell_counts <- function(sc_final, sc_tcell) {
             stat = "identity"
         ) +
         labs(
-            title = "T cell and B cell counts by tumor sample",
+            title = "T cell and B cell counts across all samples",
             x = "Sample",
             y = "Cell count",
             fill = "Cell Type"
@@ -261,15 +255,15 @@ compare_tcell_bcell_counts <- function(sc_final, sc_tcell) {
 
     # Third part: T cell subtypes from sc_tcell
     # Get T cell barcodes from sc_final to match with sc_tcell
-    t_cell_barcodes <- colnames(sc_tumor)[grepl(t_cell_pattern, sc_tumor$cell_type)]
+    t_cell_barcodes <- colnames(sc_all)[grepl(t_cell_pattern, sc_all$cell_type)]
 
-    # Filter sc_tcell to include only T cells from tumor samples
-    sc_tcell_tumor <- sc_tcell[, colnames(sc_tcell) %in% t_cell_barcodes]
+    # Filter sc_tcell to include only T cells from all samples
+    sc_tcell_all <- sc_tcell[, colnames(sc_tcell) %in% t_cell_barcodes]
 
     # Create a data frame with sample and T cell subtypes
     t_cell_subtypes_df <- data.frame(
-        sample = sc_tcell_tumor$orig.ident,
-        cell_type_dtl = sc_tcell_tumor$cell_type_dtl,
+        sample = sc_tcell_all$orig.ident,
+        cell_type_dtl = sc_tcell_all$cell_type_dtl,
         stringsAsFactors = FALSE
     )
 
@@ -297,7 +291,7 @@ compare_tcell_bcell_counts <- function(sc_final, sc_tcell) {
             stat = "identity"
         ) +
         labs(
-            title = "T cell subtype distribution by tumor sample",
+            title = "T cell subtype distribution across all samples",
             x = "Sample",
             y = "Percentage of all cells (%)",
             fill = "T cell subtype"
@@ -313,7 +307,7 @@ compare_tcell_bcell_counts <- function(sc_final, sc_tcell) {
     ggsave("results/109.paper/Fig4/tcell_subtypes_distribution.tiff",
         p_tcell_subtypes,
         width = 12,
-        height = 8
+        height = 8, compression = "lzw+p"
     )
 
     # Combine all plots
@@ -323,7 +317,7 @@ compare_tcell_bcell_counts <- function(sc_final, sc_tcell) {
     ggsave("results/109.paper/Fig4/cell_type_distribution_combined.tiff",
         combined_plot,
         width = 12,
-        height = 18
+        height = 18, compression = "lzw+p"
     )
 
     # Return the directory path
