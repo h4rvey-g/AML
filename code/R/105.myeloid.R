@@ -281,7 +281,7 @@ myeloid_DEG_vs_cluster <- function(sc_mye, myeloid_cluster) {
         filter((avg_log2FC > 0 & pct.1 > 0.2) | (avg_log2FC < 0 & pct.2 > 0.2)) %>%
         arrange(desc(abs(avg_log2FC)))
     if (nrow(deg) == 0) {
-        myeloid_cluster <- gsub("-", "_", myeloid_cluster)
+        myeloid_cluster <- sub("-([^-]*)$", "_\\1", myeloid_cluster)
         Idents(sc_mye) <- "cell_type_dtl"
         deg <- FindMarkers(
             sc_mye,

@@ -99,6 +99,7 @@ list(
     tar_target(paper_myeloid_cell_counts_path, paper_myeloid_cell_counts(sc_mye), format = "file"),
     tar_target(paper_myeloid_lipid_DEG_path, paper_myeloid_lipid_DEG(sc_mye), format = "file"),
     tar_target(paper_myeloid_GSEA_path, paper_myeloid_GSEA(sc_mye), format = "file"),
+    tar_target(paper_myeloid_markers_check_path, paper_myeloid_markers_check(sc_mye), format = "file"),
     tar_target(paper_tcell_annotate_path, paper_tcell_annotate(sc_tcell, sc_final), format = "file"),
     tar_target(compare_tcell_bcell_counts_path, compare_tcell_bcell_counts(sc_final, sc_tcell), format = "file"),
     tar_target(paper_tcell_exhaustion_path, paper_tcell_exhaustion(sc_tcell), format = "file"),

@@ -293,58 +293,119 @@ paper_myeloid_lipid_DEG <- function(sc_mye) {
 
     "results/109.paper/Fig3"
 }
-
-paper_TREM2_LAM_violin <- function(sc_mye) {
-    # 筛选TREM2_LAM细胞
-    cells <- WhichCells(sc_mye, expression = cell_type_dtl == "TREM2_LAM")
-    sc_sub <- subset(sc_mye, cells = cells)
-    # 绘制小提琴图
-    p <- VlnPlot2(
-        sc_sub,
-        features = c("CD36", "PPARG"),
-        split.by = "group",
-        nrow = 1
-    ) +
-        theme_minimal(base_size = 14) +
-        labs(
-            title = "CD36, PPARG expression in TREM2_LAM",
-            x = "Gene",
-            y = "Expression"
-        ) +
-        theme(
-            plot.title = element_text(hjust = 0.5),
-            legend.position = "top",
-            plot.background = element_rect(fill = "white")
-        )
-    ggsave("results/109.paper/Fig3/TREM2_LAM_violin.tiff", p, width = 10, height = 10)
-
-    # Add comparison between APOE_LAM and other myeloid cells
-    # Create a new column to identify APOE_LAM vs other myeloid cells
-    sc_mye$comparison_group <- ifelse(sc_mye$cell_type_dtl == "APOE_LAM",
-        "APOE_LAM",
-        "Other Myeloid"
+paper_myeloid_markers_check <- function(sc_mye) {
+    # Create output directory
+    dir.create("results/109.paper/Fig3", showWarnings = FALSE, recursive = TRUE)
+    
+    # Define key myeloid markers to check
+    myeloid_markers <- c(
+        "CD68",     # Pan-macrophage marker
+        "ADGRE1",   # F4/80, macrophage marker
+        "ITGAM",    # CD11b, myeloid cell marker
+        "CD14",     # Monocyte/macrophage marker
+        "MRC1",     # CD206, M2 macrophage marker
+        "CD163",    # M2 macrophage marker
+        "FCGR3A",   # CD16, myeloid marker
+        "TREM2",    # TREM2 (key for TREM2_LAM)
+        "APOE"      # APOE (key for APOE_LAM)
     )
-
-    # Plot violin plots for ABCA8 and RORA
-    p2 <- VlnPlot2(
-        sc_mye,
-        features = c("ABCA8", "RORA"),
-        group.by = "comparison_group",
-        ncol = 1
-    ) +
-        theme_minimal(base_size = 14) +
-        labs(
-            title = "ABCA8, RORA expression in APOE_LAM vs other myeloid cells",
-            x = "Cell Type",
-            y = "Expression"
-        ) +
-        theme(
-            plot.title = element_text(hjust = 0.5),
-            legend.position = "top",
-            plot.background = element_rect(fill = "white")
-        )
-    ggsave("results/109.paper/Fig3/APOE_LAM_vs_others_violin.tiff", p2, width = 10, height = 10)
-    "results/109.paper/Fig3/TREM2_LAM_violin.tiff"
+    
+    # Generate violin plots for each marker
+    p1 <- VlnPlot(sc_mye, 
+                 features = myeloid_markers, 
+                 group.by = "cell_type_dtl", 
+                 pt.size = 0,
+                 ncol = 3) +
+          theme(plot.background = element_rect(fill = "white"))
+    
+    ggsave("results/109.paper/Fig3/myeloid_marker_violins.tiff", p1, width = 12, height = 10, dpi = 300)
+    
+    # Create feature plots to visualize marker expression on UMAP
+    p2 <- FeaturePlot(sc_mye, 
+                     features = myeloid_markers, 
+                     reduction = "umap_mye", 
+                     ncol = 3,
+                     pt.size = 0.1,
+                     order = TRUE) &
+          theme(plot.background = element_rect(fill = "white"))
+    
+    ggsave("results/109.paper/Fig3/myeloid_marker_featureplots.tiff", p2, width = 12, height = 10, dpi = 300)
+    
+    # Generate dot plot to compare expression across cell types
+    p3 <- DotPlot(sc_mye, 
+                 features = myeloid_markers, 
+                 group.by = "cell_type_dtl") +
+          theme_bw() +
+          theme(axis.text.x = element_text(angle = 45, hjust = 1),
+                plot.background = element_rect(fill = "white")) +
+          labs(title = "Expression of Myeloid Markers Across Cell Types")
+    
+    ggsave("results/109.paper/Fig3/myeloid_marker_dotplot.tiff", p3, width = 8, height = 6, dpi = 300)
+    
+    # Calculate percentage of cells expressing each marker per cell type
+    marker_stats <- data.frame()
+    
+    for (marker in myeloid_markers) {
+        if (marker %in% rownames(sc_mye)) {
+            # Get expression data
+            expr_data <- GetAssayData(sc_mye, assay = "RNA", slot = "data")[marker, ]
+            
+            # Calculate stats per cell type
+            cell_types <- unique(sc_mye$cell_type_dtl)
+            for (ct in cell_types) {
+                # Get cells of this type
+                cells <- WhichCells(sc_mye, expression = cell_type_dtl == ct)
+                
+                # Get expression in these cells
+                expr_in_type <- expr_data[cells]
+                
+                # Calculate percentage expressing (non-zero)
+                pct_expr <- sum(expr_in_type > 0) / length(expr_in_type) * 100
+                
+                # Calculate mean expression
+                mean_expr <- mean(expr_in_type)
+                
+                # Add to results
+                marker_stats <- rbind(marker_stats, data.frame(
+                    Cell_Type = ct,
+                    Marker = marker,
+                    Pct_Expressing = pct_expr,
+                    Mean_Expression = mean_expr
+                ))
+            }
+        } else {
+            warning(paste("Marker", marker, "not found in the dataset"))
+        }
+    }
+    
+    # Save marker statistics
+    write.csv(marker_stats, "results/109.paper/Fig3/myeloid_marker_statistics.csv", row.names = FALSE)
+    
+    # Create a heatmap of percentage expressing
+    marker_stats_wide <- reshape2::dcast(marker_stats, Cell_Type ~ Marker, value.var = "Pct_Expressing")
+    rownames(marker_stats_wide) <- marker_stats_wide$Cell_Type
+    marker_stats_wide$Cell_Type <- NULL
+    
+    # Focus on macrophage subtypes for comparison
+    mac_subtypes <- c("TREM2_LAM", "APOE_LAM", "Tissue-resident_Mac")
+    if(all(mac_subtypes %in% rownames(marker_stats_wide))) {
+        mac_stats <- marker_stats_wide[mac_subtypes, ]
+        
+        # Convert to matrix for heatmap
+        mac_stats_matrix <- as.matrix(mac_stats)
+        
+        # Create heatmap
+        pdf("results/109.paper/Fig3/macrophage_marker_heatmap.pdf", width = 8, height = 6)
+        pheatmap::pheatmap(mac_stats_matrix,
+                          main = "Percentage of Cells Expressing Myeloid Markers",
+                          cluster_rows = FALSE,
+                          display_numbers = TRUE,
+                          number_format = "%.1f")
+        dev.off()
+    }
+    
+    # Return path to results
+    return("results/109.paper/Fig3")
 }
 paper_myeloid_GSEA <- function(sc_mye) {
     # Create directory for results
