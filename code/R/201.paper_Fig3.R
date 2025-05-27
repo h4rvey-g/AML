@@ -45,7 +45,7 @@ paper_myeloid_annotate <- function(sc_mye) {
 paper_myeloid_cell_counts <- function(sc_mye) {
     # Ensure directory exists
     dir.create("results/109.paper/Fig3", showWarnings = FALSE, recursive = TRUE)
-    
+
     # Extract cell type and dataset information
     cell_data <- data.frame(
         cell_type = sc_mye$cell_type_dtl,
@@ -53,7 +53,7 @@ paper_myeloid_cell_counts <- function(sc_mye) {
         group = sc_mye$group,
         stringsAsFactors = FALSE
     )
-    
+
     # Count cells per cell type per dataset
     cell_counts <- cell_data %>%
         group_by(dataset, cell_type, group) %>%
@@ -61,19 +61,19 @@ paper_myeloid_cell_counts <- function(sc_mye) {
         # Ensure all cell types are present for all datasets (fill with 0)
         complete(dataset, cell_type, fill = list(count = 0)) %>%
         # Join back with group information
-        left_join(unique(cell_data[,c("dataset", "group")]), by = "dataset") %>%
+        left_join(unique(cell_data[, c("dataset", "group")]), by = "dataset") %>%
         # Fix the group column issue by using group.y as the definitive group
         mutate(group = coalesce(group.y, group.x)) %>%
-        select(-group.x, -group.y)  # Remove the redundant columns
-    
+        select(-group.x, -group.y) # Remove the redundant columns
+
     # Order cell types by their overall abundance
     cell_type_order <- cell_data %>%
         dplyr::count(cell_type) %>%
         arrange(desc(n)) %>%
         pull(cell_type)
-    
+
     cell_counts$cell_type <- factor(cell_counts$cell_type, levels = cell_type_order)
-    
+
     # Create the bar plot
     p <- ggplot(cell_counts, aes(x = dataset, y = count, fill = cell_type)) +
         geom_bar(stat = "identity", position = "dodge") +
@@ -92,7 +92,7 @@ paper_myeloid_cell_counts <- function(sc_mye) {
             strip.background = element_rect(fill = "lightgrey"),
             strip.text = element_text(face = "bold")
         )
-    
+
     # Save the plot
     ggsave("results/109.paper/Fig3/myeloid_cell_counts_per_sample.tiff", p, width = 12, height = 6, dpi = 300)
     # Save cell counts to TSV file - grouped by group and cell_type
@@ -100,19 +100,20 @@ paper_myeloid_cell_counts <- function(sc_mye) {
         group_by(group, cell_type) %>%
         summarize(total_count = sum(count), .groups = "drop") %>%
         arrange(group, desc(total_count))
-    
-    write.table(cell_counts_summary, 
-                file = "results/109.paper/Fig3/myeloid_cell_counts_summary.tsv", 
-                sep = "\t", 
-                row.names = FALSE, 
-                quote = FALSE)
+
+    write.table(cell_counts_summary,
+        file = "results/109.paper/Fig3/myeloid_cell_counts_summary.tsv",
+        sep = "\t",
+        row.names = FALSE,
+        quote = FALSE
+    )
 
     # Create a stacked percentage plot to show relative composition
     cell_pct <- cell_counts %>%
         group_by(dataset) %>%
         mutate(percentage = count / sum(count) * 100) %>%
         ungroup()
-    
+
     p2 <- ggplot(cell_pct, aes(x = dataset, y = percentage, fill = cell_type)) +
         geom_bar(stat = "identity", position = "stack") +
         facet_grid(. ~ group, scales = "free_x", space = "free") +
@@ -130,10 +131,10 @@ paper_myeloid_cell_counts <- function(sc_mye) {
             strip.background = element_rect(fill = "lightgrey"),
             strip.text = element_text(face = "bold")
         )
-    
+
     # Save the percentage plot
     ggsave("results/109.paper/Fig3/myeloid_cell_percentage_per_sample.tiff", p2, width = 12, height = 6, dpi = 300)
-    
+
     # Return path to the results
     return("results/109.paper/Fig3")
 }
@@ -293,78 +294,82 @@ paper_myeloid_lipid_DEG <- function(sc_mye) {
 
     "results/109.paper/Fig3"
 }
-paper_myeloid_markers_check <- function(sc_mye) {
+paper_macrophage_markers_check <- function(sc_mye) {
     # Create output directory
     dir.create("results/109.paper/Fig3", showWarnings = FALSE, recursive = TRUE)
-    
+
     # Define key myeloid markers to check
-    myeloid_markers <- c(
-        "CD68",     # Pan-macrophage marker
-        "ADGRE1",   # F4/80, macrophage marker
-        "ITGAM",    # CD11b, myeloid cell marker
-        "CD14",     # Monocyte/macrophage marker
-        "MRC1",     # CD206, M2 macrophage marker
-        "CD163",    # M2 macrophage marker
-        "FCGR3A",   # CD16, myeloid marker
-        "TREM2",    # TREM2 (key for TREM2_LAM)
-        "APOE"      # APOE (key for APOE_LAM)
+    macrophage_markers <- c(
+        "CD68", # Pan-macrophage marker
+        "ADGRE1", # F4/80, macrophage marker
+        "ITGAM", # CD11b, myeloid cell marker
+        "CD14", # Monocyte/macrophage marker
+        "MRC1", # CD206, M2 macrophage marker
+        "CD163", # M2 macrophage marker
+        "FCGR3A", # CD16, myeloid marker
+        "TREM2", # TREM2 (key for TREM2_LAM)
+        "APOE" # APOE (key for APOE_LAM)
     )
-    
+
     # Generate violin plots for each marker
-    p1 <- VlnPlot(sc_mye, 
-                 features = myeloid_markers, 
-                 group.by = "cell_type_dtl", 
-                 pt.size = 0,
-                 ncol = 3) +
-          theme(plot.background = element_rect(fill = "white"))
-    
+    p1 <- VlnPlot2(sc_mye,
+        features = macrophage_markers,
+        group.by = "cell_type_dtl",
+        pt.size = 0,
+        ncol = 3
+    ) +
+        theme(plot.background = element_rect(fill = "white"))
+
     ggsave("results/109.paper/Fig3/myeloid_marker_violins.tiff", p1, width = 12, height = 10, dpi = 300)
-    
-    # Create feature plots to visualize marker expression on UMAP
-    p2 <- FeaturePlot(sc_mye, 
-                     features = myeloid_markers, 
-                     reduction = "umap_mye", 
-                     ncol = 3,
-                     pt.size = 0.1,
-                     order = TRUE) &
-          theme(plot.background = element_rect(fill = "white"))
-    
-    ggsave("results/109.paper/Fig3/myeloid_marker_featureplots.tiff", p2, width = 12, height = 10, dpi = 300)
-    
+    # Generate heatmap of key macrophage markers
+    toplot <- CalcStats(sc_mye,
+        features = macrophage_markers,
+        method = "zscore", order = "value",
+        group.by = "cell_type_dtl"
+    )
+
+    # Generate heatmap
+    p2 <- Heatmap(toplot %>% t(), lab_fill = "zscore") +
+        theme(plot.background = element_rect(fill = "white"))
+
+    ggsave("results/109.paper/Fig3/myeloid_marker_heatmap.tiff", p2, width = 9, height = 6, dpi = 300)
     # Generate dot plot to compare expression across cell types
-    p3 <- DotPlot(sc_mye, 
-                 features = myeloid_markers, 
-                 group.by = "cell_type_dtl") +
-          theme_bw() +
-          theme(axis.text.x = element_text(angle = 45, hjust = 1),
-                plot.background = element_rect(fill = "white")) +
-          labs(title = "Expression of Myeloid Markers Across Cell Types")
-    
+    p3 <- DotPlot2(sc_mye,
+        features = macrophage_markers,
+        group.by = "cell_type_dtl"
+    ) +
+        theme_bw() +
+        theme(
+            axis.text.x = element_text(angle = 45, hjust = 1),
+            plot.background = element_rect(fill = "white")
+        ) +
+        labs(title = "Expression of Myeloid Markers Across Cell Types")
+
     ggsave("results/109.paper/Fig3/myeloid_marker_dotplot.tiff", p3, width = 8, height = 6, dpi = 300)
-    
+
     # Calculate percentage of cells expressing each marker per cell type
     marker_stats <- data.frame()
-    
-    for (marker in myeloid_markers) {
+
+    for (marker in macrophage_markers) {
         if (marker %in% rownames(sc_mye)) {
             # Get expression data
             expr_data <- GetAssayData(sc_mye, assay = "RNA", slot = "data")[marker, ]
-            
+
             # Calculate stats per cell type
             cell_types <- unique(sc_mye$cell_type_dtl)
             for (ct in cell_types) {
                 # Get cells of this type
                 cells <- WhichCells(sc_mye, expression = cell_type_dtl == ct)
-                
+
                 # Get expression in these cells
                 expr_in_type <- expr_data[cells]
-                
+
                 # Calculate percentage expressing (non-zero)
                 pct_expr <- sum(expr_in_type > 0) / length(expr_in_type) * 100
-                
+
                 # Calculate mean expression
                 mean_expr <- mean(expr_in_type)
-                
+
                 # Add to results
                 marker_stats <- rbind(marker_stats, data.frame(
                     Cell_Type = ct,
@@ -377,33 +382,32 @@ paper_myeloid_markers_check <- function(sc_mye) {
             warning(paste("Marker", marker, "not found in the dataset"))
         }
     }
-    
+
     # Save marker statistics
     write.csv(marker_stats, "results/109.paper/Fig3/myeloid_marker_statistics.csv", row.names = FALSE)
-    
+
     # Create a heatmap of percentage expressing
     marker_stats_wide <- reshape2::dcast(marker_stats, Cell_Type ~ Marker, value.var = "Pct_Expressing")
     rownames(marker_stats_wide) <- marker_stats_wide$Cell_Type
     marker_stats_wide$Cell_Type <- NULL
-    
+
     # Focus on macrophage subtypes for comparison
-    mac_subtypes <- c("TREM2_LAM", "APOE_LAM", "Tissue-resident_Mac")
-    if(all(mac_subtypes %in% rownames(marker_stats_wide))) {
-        mac_stats <- marker_stats_wide[mac_subtypes, ]
-        
+    # Create heatmap for all myeloid cell types
+    if (nrow(marker_stats_wide) > 0) {
         # Convert to matrix for heatmap
-        mac_stats_matrix <- as.matrix(mac_stats)
-        
+        mac_stats_matrix <- as.matrix(marker_stats_wide)
+
         # Create heatmap
-        pdf("results/109.paper/Fig3/macrophage_marker_heatmap.pdf", width = 8, height = 6)
+        pdf("results/109.paper/Fig3/myeloid_marker_heatmap.pdf", width = 8, height = 6)
         pheatmap::pheatmap(mac_stats_matrix,
-                          main = "Percentage of Cells Expressing Myeloid Markers",
-                          cluster_rows = FALSE,
-                          display_numbers = TRUE,
-                          number_format = "%.1f")
+            main = "Percentage of Cells Expressing Myeloid Markers",
+            cluster_rows = FALSE,
+            display_numbers = TRUE,
+            number_format = "%.1f"
+        )
         dev.off()
     }
-    
+
     # Return path to results
     return("results/109.paper/Fig3")
 }

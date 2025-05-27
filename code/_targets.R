@@ -18,7 +18,7 @@ tar_option_set(
     tidy_eval = FALSE,
     packages <- c(
         "tidyverse", "rliger", "Seurat", "reticulate", "SeuratExtend", "tidyseurat", "scCustomize", "patchwork", "tidyplots",
-        "liana", "SingleCellExperiment", "scDblFinder", "foreach", "doParallel", "scLink", "sccomp", "ggalign", "escape",
+        "liana", "SingleCellExperiment", "scDblFinder", "foreach", "doParallel", "ggalign", 
         "RColorBrewer", "EnhancedVolcano"
     ),
     controller = crew_controller_local(workers = 20, seconds_timeout = 6000),
@@ -58,7 +58,7 @@ list(
     tar_target(cell_communication_path, cell_communication(sc_final)),
     tar_target(check_endo_markers_res, check_endo_markers(sc_final)),
     tar_target(sc_mye_clust, sub_cluster_myeloid(sc_final)),
-    tar_target(sc_mye_annotation, sub_annotation_myeloid(sc_mye_clust, sc_final)),
+    tar_target(sc_mye_annotation, sub_annotation_myeloid(sc_mye_clust, sc_final, sc_doublet)),
     tar_target(sc_mye, myeloid_annotate(sc_mye_annotation)),
     tar_target(mye_cluster, unique(sc_mye$cell_type_dtl)),
     tar_target(mye_DEG_cluster_path, myeloid_DEG_vs_cluster(sc_mye, mye_cluster), format = "file", pattern = map(mye_cluster)),
@@ -99,7 +99,7 @@ list(
     tar_target(paper_myeloid_cell_counts_path, paper_myeloid_cell_counts(sc_mye), format = "file"),
     tar_target(paper_myeloid_lipid_DEG_path, paper_myeloid_lipid_DEG(sc_mye), format = "file"),
     tar_target(paper_myeloid_GSEA_path, paper_myeloid_GSEA(sc_mye), format = "file"),
-    tar_target(paper_myeloid_markers_check_path, paper_myeloid_markers_check(sc_mye), format = "file"),
+    tar_target(paper_macrophege_markers_check_path, paper_macrophage_markers_check(sc_mye), format = "file"),
     tar_target(paper_tcell_annotate_path, paper_tcell_annotate(sc_tcell, sc_final), format = "file"),
     tar_target(compare_tcell_bcell_counts_path, compare_tcell_bcell_counts(sc_final, sc_tcell), format = "file"),
     tar_target(paper_tcell_exhaustion_path, paper_tcell_exhaustion(sc_tcell), format = "file"),

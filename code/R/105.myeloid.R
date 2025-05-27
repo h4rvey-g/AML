@@ -6,16 +6,45 @@ sub_cluster_myeloid <- function(sc_int) {
     # 重新聚类
     sc_int <- sc_int %>%
         FindNeighbors(dims = 1:30, reduction = "harmony") %>%
+        RunUMAP(dims = 1:30, reduction = "harmony", reduction.name = "umap_mye") %>%
         FindClusters(resolution = 0.4, algorithm = 4, method = "igraph", cluster.name = "immune_subcluster")
 
     sc_int
 }
-sub_annotation_myeloid <- function(sc_int, sc_final) {
-    # # remove cluster 7 cells first
-    # sc_int <- sc_int %>% filter(immune_subcluster != "7")
+sub_annotation_myeloid <- function(sc_int, sc_final, sc_doublet) {
+    # Further subcluster cluster 4
+    cluster_4_cells <- sc_int[, sc_int$immune_subcluster == "4"]
+
+    if (ncol(cluster_4_cells) > 50) { # Only subcluster if enough cells
+        cluster_4_cells <- cluster_4_cells %>%
+            FindNeighbors(dims = 1:30, reduction = "harmony") %>%
+            RunUMAP(dims = 1:30, reduction = "harmony", reduction.name = "umap_mye_4") %>%
+            FindClusters(resolution = 0.3, algorithm = 4, method = "igraph", cluster.name = "subcluster_4")
+
+        # Add subcluster info to main object
+        sc_int$immune_subcluster <- as.character(sc_int$immune_subcluster)
+        sc_int$immune_subcluster[colnames(cluster_4_cells)] <- paste0("4_", cluster_4_cells$subcluster_4)
+        sc_int$immune_subcluster <- as.factor(sc_int$immune_subcluster)
+
+        # Visualize cluster 4 subclusters
+        p_sub4 <- DimPlot2(cluster_4_cells,
+            reduction = "umap_mye_4",
+            group.by = "subcluster_4", label = TRUE
+        ) +
+            theme(plot.background = element_rect(fill = "white"))
+        ggsave("results/107.myeloid/cluster_4_subclusters.png", p_sub4, width = 7, height = 7)
+    }
+    # Remove subcluster 4_4 if it exists
+    if ("4_4" %in% unique(sc_int$immune_subcluster)) {
+        cells_to_remove <- colnames(sc_int)[sc_int$immune_subcluster == "4_4"]
+        sc_int <- sc_int[, !colnames(sc_int) %in% cells_to_remove]
+
+        # Update factor levels to remove 4_4
+        sc_int$immune_subcluster <- droplevels(sc_int$immune_subcluster)
+    }
     # 可视化聚类结果
     p1 <- DimPlot2(sc_int,
-        reduction = "umap_integrated",
+        reduction = "umap_mye",
         group.by = "immune_subcluster", label = TRUE
     ) +
         theme(plot.background = element_rect(fill = "white"))
@@ -23,49 +52,131 @@ sub_annotation_myeloid <- function(sc_int, sc_final) {
     ggsave("results/107.myeloid/sub_cluster_immune.png", p1, width = 7, height = 7)
 
     markers <- list(
-        # Tissue-resident & specialized macrophages
-        "LYVE1_Mac" = c("LYVE1", "CD163", "MRC1", "FOLR2"), # Removed MRC1L1 (non-human ortholog)
-        "Kupffer_like" = c("CLEC4F", "ID1"),
-        "Microglia_like" = c("P2RY12", "TMEM119"),
-        "Alveolar_Mac" = c("MARCO", "PPARG"),
 
-        # Monocytes
-        "Classical_Mono" = c("CD14", "VCAN", "CCR2", "LYZ", "S100A8", "S100A9"),
-        "NonClassical_Mono" = c("FCGR3A", "CX3CR1", "LST1", "MS4A7", "NR4A1"),
+        # --- Pan-Myeloid Considerations ---
+        "Pan_Myeloid" = c("PTPRC", "CD68", "ITGAM", "CSF1R"),
 
-        # Inflammatory/activated macrophages
-        "Mac_M1" = c("CD80", "CD86", "STAT1", "IL1B", "CXCL10", "HLA-DRA", "NOS2", "IL6", "IL12B"),
-        "Mac_M2" = c("CD163", "MRC1", "FOLR2", "CCL18", "MAFB"),
+        # --- Tissue-Resident & Specialized Macrophages ---
+        "LYVE1_Mac" = c("LYVE1", "CD163", "MRC1", "FOLR2", "TIMD4"),
+        "Kupffer_like_Mac" = c("CLEC4F", "CD5L", "MARCO", "ID1", "VSIG4"),
+        "Microglia_like" = c("P2RY12", "TMEM119", "CX3CR1", "CSF1R", "HEXB", "SLC2A5", "C1QA"),
+        "Alveolar_Mac" = c("MARCO", "PPARG", "FABP4", "ITGAX", "SIGLEC1"),
 
-        # Lipid-associated macrophages / foam cells
-        "Mac_LAM" = c("TREM2", "APOE", "LPL", "FABP4"),
-        "Foam_Cell" = c("CD36", "MSR1", "PLIN2", "ADRP"),
+        # --- Monocytes ---
+        "Classical_Mono" = c("CD14", "VCAN", "CCR2", "LYZ", "S100A8", "S100A9", "FCN1", "SELL"),
+        "NonClassical_Mono" = c("FCGR3A", "CX3CR1", "MS4A7", "NR4A1", "CDKN1C", "LILRB2"),
 
-        # Erythroid lineage (exclude these if only immune focus)
-        "Eryth" = c("HBB", "GYPA", "SLC4A1", "ALAS2"),
+        # --- Inflammatory/Activated Macrophage States ---
+        "Mac_M1_like" = c("CD80", "CD86", "STAT1", "IL1B", "CXCL9", "CXCL10", "HLA-DRA", "NOS2", "TNF", "IRF5", "SOCS3"),
+        "Mac_M2_like" = c("CD163", "MRC1", "FOLR2", "CCL18", "ARG1", "IL4R", "STAT6", "MAFB", "TGFB1", "CD209"),
 
-        # Granulocytes
-        "Neutrophil" = c("CSF3R", "CEACAM8", "CXCR2", "LCN2", "MPO"),
-        "Eosinophil" = c("CLC", "PRG2", "IL5RA", "EPX", "ALOX15"),
-        "Mast" = c("KIT", "TPSAB1", "CMA1", "CPA3"),
+        # --- Lipid-Associated Macrophages (LAM) / Foam Cells ---
+        "Mac_LAM_Foam" = c("TREM2", "APOE", "LPL", "FABP4", "CD36", "MSR1", "PLIN2", "SPP1", "GPNMB", "CD9", "LGALS3"),
 
-        # Dendritic cells
-        "cDC1" = c("CLEC9A", "XCR1", "BATF3", "IRF8"),
-        "cDC2" = c("CD1C", "FCER1A", "IRF4", "ITGAX"),
-        "mo_DC" = c("CD1C", "FCGR3A", "CCR7", "CD80", "CD86", "LAMP3"),
+        # --- Dendritic Cells ---
+        "cDC1" = c("CLEC9A", "XCR1", "BATF3", "IRF8", "THBD"),
+        "cDC2" = c("CD1C", "SIRPA", "CLEC10A", "FCER1A", "IRF4", "HLA-DQA1", "CD2"),
+        "pDC" = c("CLEC4C", "NRP1", "IL3RA", "TCF4", "LILRA4", "GZMB", "IRF7"),
+        "mo_DC" = c("CD14", "S100A8", "S100A9", "ITGAM", "CD1C", "FCGR3A", "CD209", "CCR7", "CD80", "CD86", "LAMP3", "HLA-DRA", "ZNF366"),
 
-        # Activation / proliferation
-        "Activation" = c("CD83", "CD40", "LAMP1"),
-        "Proliferation" = c("MKI67", "TOP2A", "CENPF")
+        # --- Granulocytes ---
+        "Neutrophil" = c("CSF3R", "FCGR3B", "CEACAM8", "CXCR2", "MPO", "ELANE", "PRTN3"),
+        "Eosinophil" = c("SIGLEC8", "CLC", "PRG2", "IL5RA", "EPX", "RNASE2", "RNASE3"),
+        "Basophil" = c("ENPP3", "FCER1A", "CCR3", "IL3RA", "GATA2", "MS4A2", "ARHGEF25", "CLC"),
+        "Mast" = c("KIT", "TPSAB1", "CMA1", "CPA3", "FCER1A", "MS4A2", "HPGDS"),
+
+        # --- Erythroid Lineage (for exclusion) ---
+        "Erythroid" = c("HBB", "HBA1", "GYPA", "SLC4A1", "ALAS2"),
+
+        # --- General Cell State Markers ---
+        "Activation_Maturation" = c("CD83", "CD40", "LAMP1", "PDCD1LG1", "ICOSLG", "RELB"),
+        "Proliferation" = c("MKI67", "TOP2A", "PCNA", "CENPF")
     )
 
 
     # 计算并绘制热图
     toplot <- CalcStats(sc_int,
         features = markers %>% unlist(),
-        method = "zscore", order = "value"
+        method = "zscore", order = "value",
+        group.by = "immune_subcluster"
     )
 
+    # Calculate percentage of cells expressing each marker in each cluster
+    pct_expressed <- data.frame()
+
+    for (cluster in unique(sc_int$immune_subcluster)) {
+        cluster_cells <- sc_int[, sc_int$immune_subcluster == cluster]
+
+        for (marker in unlist(markers)) {
+            if (marker %in% rownames(cluster_cells)) {
+                # Calculate percentage of cells with expression > 0
+                pct_positive <- mean(GetAssayData(cluster_cells, assay = "RNA")[marker, ] > 0) * 100
+
+                pct_expressed <- rbind(pct_expressed, data.frame(
+                    cluster = cluster,
+                    gene = marker,
+                    pct_expressed = round(pct_positive, 2)
+                ))
+            }
+        }
+    }
+
+    # Pivot to wide format for easier reading
+    pct_wide <- pct_expressed %>%
+        arrange(cluster) %>%
+        pivot_wider(names_from = cluster, values_from = pct_expressed, names_prefix = "cluster_", values_fn = mean)
+
+    # Save the percentage expression data
+    write_tsv(pct_wide, "results/107.myeloid/marker_percentage_expression.tsv")
+    # Calculate average nUMI and nFeatures for each cluster
+    cluster_stats <- sc_int@meta.data %>%
+        group_by(immune_subcluster) %>%
+        summarise(
+            avg_nUMI = round(mean(nCount_RNA), 2),
+            avg_nFeatures = round(mean(nFeature_RNA), 2),
+            median_nUMI = round(median(nCount_RNA), 2),
+            median_nFeatures = round(median(nFeature_RNA), 2),
+            .groups = "drop"
+        )
+
+    # Save cluster statistics
+    write_tsv(cluster_stats, "results/107.myeloid/cluster_statistics.tsv")
+    # Filter sc_doublet for cells in sc_int and add cluster information
+    sc_doublet_subset <- sc_doublet[, colnames(sc_doublet) %in% colnames(sc_int)]
+    sc_doublet_subset$immune_subcluster <- sc_int$immune_subcluster[match(colnames(sc_doublet_subset), colnames(sc_int))]
+
+    # Calculate doublet score statistics for each cluster
+    doublet_stats <- sc_doublet_subset@meta.data %>%
+        group_by(immune_subcluster) %>%
+        summarise(
+            mean_doublet_score = round(mean(scDblFinder.score), 4),
+            median_doublet_score = round(median(scDblFinder.score), 4),
+            q25_doublet_score = round(quantile(scDblFinder.score, 0.25), 4),
+            q75_doublet_score = round(quantile(scDblFinder.score, 0.75), 4),
+            min_doublet_score = round(min(scDblFinder.score), 4),
+            max_doublet_score = round(max(scDblFinder.score), 4),
+            .groups = "drop"
+        )
+
+    # Save doublet statistics
+    write_tsv(doublet_stats, "results/107.myeloid/doublet_statistics.tsv")
+
+    # Create boxplot for doublet scores by cluster
+    p_doublet <- ggplot(sc_doublet_subset@meta.data, aes(x = immune_subcluster, y = scDblFinder.score)) +
+        geom_boxplot(aes(fill = immune_subcluster)) +
+        labs(
+            title = "Doublet Scores by Immune Subcluster",
+            x = "Immune Subcluster",
+            y = "scDblFinder Score"
+        ) +
+        theme_minimal() +
+        theme(
+            plot.background = element_rect(fill = "white"),
+            axis.text.x = element_text(angle = 45, hjust = 1),
+            legend.position = "none"
+        )
+
+    ggsave("results/107.myeloid/doublet_scores_boxplot.png", p_doublet, width = 8, height = 6)
     gene_groups <- rep(names(markers), lengths(markers)) %>%
         setNames(markers %>% unlist()) %>%
         .[rownames(toplot)]
@@ -74,9 +185,14 @@ sub_annotation_myeloid <- function(sc_int, sc_final) {
         theme(plot.background = element_rect(fill = "white"))
     ggsave("results/107.myeloid/sub_cluster_immune_heatmap.png", p2, width = 8, height = 15)
     write_tsv(
-        toplot %>% as.data.frame() %>% rownames_to_column("gene"),
+        toplot %>%
+            as.data.frame() %>%
+            rownames_to_column("gene") %>%
+            # keep 2 digits after decimal
+            mutate(across(where(is.numeric), ~ round(.x, 2))),
         "results/107.myeloid/immune_subcluster_expression.tsv"
     )
+
     p <- DotPlot2(sc_int,
         features = markers,
         group.by = "immune_subcluster",
@@ -143,10 +259,12 @@ myeloid_annotate <- function(sc_mye_clust) {
     cluster_map <- c(
         "1" = "Tissue-resident_Mac",
         "2" = "TREM2_LAM",
-        "3" = "DC",
-        "4" = "Mast",
+        "3" = "PPARG_LAM",
+        "4_1" = "Neutrophil",
+        "4_2" = "Mixed",
+        "4_3" = "cDC2",
         "5" = "Eosinophil",
-        "6" = "APOE_LAM",
+        "6" = "APOE_Myeloid",
         "7" = "Eryth"
     )
 
@@ -170,13 +288,16 @@ myeloid_annotate <- function(sc_mye_clust) {
     # Save the plot
     ggsave("results/107.myeloid/myeloid_annotated.png", p, width = 8, height = 7)
     markers <- list(
-        "TREM2_LAM" = c("CD40", "STAT1", "TREM2"), # TREM2+ Macrophages
-        "DC" = c("PPARG", "CD83", "CD86"), # Foam Macrophages
-        "APOE_LAM" = c("APOE", "ID1"),
-        "Mast" = c("TPSAB1", "LYZ", "CCR2"), # Mast Cells
-        "Eosinophil" = c("IL5RA", "EPO", "CXCR2"), # Eosinophils
-        "Tissue-resident" = c("LYVE1", "MRC1", "CD163"), # Perivascular Macrophages
-        "Erythrocyte" = c("GYPA", "HBB", "SLC4A1") # Erythrocytes
+        "Pan_Mac" = c("CD163", "MRC1", "MS4A7", "CD68"),
+        "TREM2_LAM" = c("TREM2", "P2RY12", "SIGLEC8"),
+        "PPARG_LAM" = c("GPNMB", "FABP5", "PPARG", "PLIN2"),
+        "Neutrophil" = c("FCGR3B", "AIF1"),
+        "Mixed (Mast, pDC, Neut)" = c("TPSAB1", "MS4A2", "CPA3", "LILRA4", "CLEC9A", "MPO"),
+        "cDC2" = c("FCER1A", "CD207", "LYZ", "CD1C"),
+        "Eosinophil" = c("CLC", "CXCR2", "IL5RA"),
+        "APOE_Myeloid" = c("ENPP3", "CD9", "CADM1", "APOE"),
+        "APOE_Myeloid" = c("APOE", "ENPP3", "CD9"),
+        "Eryth" = c("HBB", "GYPA", "ALAS2")
     )
 
     # 计算并绘制热图
@@ -191,8 +312,16 @@ myeloid_annotate <- function(sc_mye_clust) {
 
     p2 <- Heatmap(t(toplot), lab_fill = "zscore", facet_col = gene_groups) +
         theme(plot.background = element_rect(fill = "white"))
-    ggsave("results/107.myeloid/myeloid_annotate_heatmap.png", p2, width = 10, height = 6)
+    ggsave("results/107.myeloid/myeloid_annotate_heatmap.png", p2, width = 15, height = 6)
 
+    write_tsv(
+        toplot %>%
+            as.data.frame() %>%
+            rownames_to_column("gene") %>%
+            # keep 2 digits after decimal
+            mutate(across(where(is.numeric), ~ round(.x, 2))),
+        "results/107.myeloid/myeloid_annotate_expression.tsv"
+    )
     markers <- list(
         # Tissue-resident & specialized macrophages
         "LYVE1_Mac" = c("LYVE1", "CD163", "MRC1", "FOLR2"), # Removed MRC1L1 (non-human ortholog)
@@ -768,27 +897,27 @@ run_myeloid_trajectory <- function(sc_mye) {
 
     # # 5. Gene Expression Dynamics
 
-fate1_genes <- c(
-    "TREM2", "TYROBP",     # Lipid & damage sensing
-    "SPP1",                # Osteopontin: matrix remodeling
-    "CD9", "LGALS3", "LGALS1",   # Galectins & signatures, immunoreg.
-    "CLEC7A",              # Damage sensing
-    "AXL", "MERTK",        # Apoptotic cell clearance
-    "CTSB", "CTSL",        # Lysosomal function
-    "GPNMB",               # Fibrosis/immunomod
-    "LPL",                 # Lipoprotein uptake
-    "FABP4", "FABP5"       # Fatty acid chaperones
-)
+    fate1_genes <- c(
+        "TREM2", "TYROBP", # Lipid & damage sensing
+        "SPP1", # Osteopontin: matrix remodeling
+        "CD9", "LGALS3", "LGALS1", # Galectins & signatures, immunoreg.
+        "CLEC7A", # Damage sensing
+        "AXL", "MERTK", # Apoptotic cell clearance
+        "CTSB", "CTSL", # Lysosomal function
+        "GPNMB", # Fibrosis/immunomod
+        "LPL", # Lipoprotein uptake
+        "FABP4", "FABP5" # Fatty acid chaperones
+    )
 
 
-fate2_genes <- c(
-    "APOE", "ABCA1", "ABCG1",
-    "PPARG", "NR1H3", "PLTP",
-    "MRC1",                # Homeostatic/anti-inflammatory
-    "IRAK1", "TRAF6",      # miR-146a NF-κB regulatory axis
-    "MERTK",               # Efferocytosis, resolution via ApoE
-    "SELENOP"      # Antioxidant defense
-)
+    fate2_genes <- c(
+        "APOE", "ABCA1", "ABCG1",
+        "PPARG", "NR1H3", "PLTP",
+        "MRC1", # Homeostatic/anti-inflammatory
+        "IRAK1", "TRAF6", # miR-146a NF-κB regulatory axis
+        "MERTK", # Efferocytosis, resolution via ApoE
+        "SELENOP" # Antioxidant defense
+    )
 
 
     # Generate heatmaps for each fate
