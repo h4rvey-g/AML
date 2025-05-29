@@ -90,6 +90,7 @@ list(
 
     # paper plot
     tar_target(sc_final_n, paper_final_annotation(sc_final, sc_adipo)),
+    tar_target(paper_receptor_expression_path, paper_receptor_expression(sc_final_n), format = "file"),
     tar_target(paper_sub_annotation_adipo_path, paper_sub_annotation_adipo(sc_adipo), format = "file"),
     tar_target(paper_cell_distribution_path, paper_cell_distribution(sc_final), format = "file"),
     tar_target(paper_adipo_distribution_path, paper_plot_adipo_distribution(sc_adipo, adipo_composition_test), format = "file"),

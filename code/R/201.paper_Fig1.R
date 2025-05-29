@@ -317,3 +317,79 @@ paper_cell_distribution <- function(sc_final) {
     ggsave("results/109.paper/Fig1/cell_type_distribution_bar.tiff", p_bar, width = 8, height = 6)
     "results/109.paper/Fig1"
 }
+
+paper_receptor_expression <- function(sc_final) {
+    # Define receptor genes of interest
+    receptor_genes <- c("AR", "MC2R", "CSF1R")
+
+    # Check which genes are present in the dataset
+    available_genes <- receptor_genes[receptor_genes %in% rownames(sc_final)]
+    missing_genes <- receptor_genes[!receptor_genes %in% rownames(sc_final)]
+
+    if (length(missing_genes) > 0) {
+        message("Missing genes: ", paste(missing_genes, collapse = ", "))
+    }
+
+    if (length(available_genes) == 0) {
+        stop("None of the receptor genes found in the dataset")
+    }
+
+    # Create feature plots for each available receptor
+    plot_list <- list()
+
+    # Create feature plots for all available receptors at once
+    p <- DimPlot2(sc_final,
+        features = available_genes,
+        reduction = "umap_integrated",
+        ncol = length(available_genes)
+    ) &
+        theme(plot.background = element_rect(fill = "white"))
+
+    # Save combined plot
+    ggsave("results/109.paper/Fig1/receptor_expression_combined.tiff",
+        p,
+        width = 7 * length(available_genes), height = 6,
+        device = "tiff", compression = "lzw"
+    )
+
+    # Create violin plots by cell type for all genes at once
+    p_violin <- VlnPlot2(sc_final,
+        features = available_genes,
+        group.by = "cell_type_dtl",
+        pt.size = 0,
+        ncol = 1
+    ) &
+        theme(
+            plot.background = element_rect(fill = "white"),
+            axis.text.x = element_text(angle = 45, hjust = 1)
+        )
+
+    ggsave("results/109.paper/Fig1/receptor_violin_combined.tiff",
+        p_violin,
+        width = 10, height = 15,
+        device = "tiff", compression = "lzw"
+    )
+
+    # Create expression summary table
+    expr_summary <- sc_final@assays$RNA$data[available_genes, , drop = FALSE] %>%
+        as.matrix() %>%
+        t() %>%
+        as.data.frame() %>%
+        bind_cols(cell_type = sc_final$cell_type_dtl, group = sc_final$group) %>%
+        pivot_longer(
+            cols = all_of(available_genes),
+            names_to = "gene",
+            values_to = "expression"
+        ) %>%
+        group_by(gene, cell_type, group) %>%
+        summarise(
+            mean_expr = mean(expression),
+            median_expr = median(expression),
+            pct_positive = sum(expression > 0) / n() * 100,
+            .groups = "drop"
+        )
+
+    write_tsv(expr_summary, "results/109.paper/Fig1/receptor_expression_summary.tsv")
+
+    "results/109.paper/Fig1/"
+}

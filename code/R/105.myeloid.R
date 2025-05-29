@@ -260,9 +260,9 @@ myeloid_annotate <- function(sc_mye_clust) {
         "1" = "Tissue-resident_Mac",
         "2" = "TREM2_LAM",
         "3" = "PPARG_LAM",
-        "4_1" = "Neutrophil",
-        "4_2" = "Mixed",
-        "4_3" = "cDC2",
+        "4_1" = "DC",
+        "4_2" = "Mast",
+        "4_3" = "DC",
         "5" = "Eosinophil",
         "6" = "APOE_Myeloid",
         "7" = "Eryth"
@@ -288,13 +288,12 @@ myeloid_annotate <- function(sc_mye_clust) {
     # Save the plot
     ggsave("results/107.myeloid/myeloid_annotated.png", p, width = 8, height = 7)
     markers <- list(
-        "Pan_Mac" = c("CD163", "MRC1", "MS4A7", "CD68"),
+        "Pan_Mac" = c("CD163", "MRC1", "LYVE1", "CD68"),
         "TREM2_LAM" = c("TREM2", "P2RY12", "SIGLEC8"),
         "PPARG_LAM" = c("GPNMB", "FABP5", "PPARG", "PLIN2"),
-        "Neutrophil" = c("FCGR3B", "AIF1"),
-        "Mixed (Mast, pDC, Neut)" = c("TPSAB1", "MS4A2", "CPA3", "LILRA4", "CLEC9A", "MPO"),
-        "cDC2" = c("FCER1A", "CD207", "LYZ", "CD1C"),
-        "Eosinophil" = c("CLC", "CXCR2", "IL5RA"),
+        "Mast" = c("TPSAB1", "CMA1", "KIT"),
+        "DC" = c("FCER1A", "CD1C"),
+        "Eosinophil" = c("CXCR2", "IL5RA"),
         "APOE_Myeloid" = c("ENPP3", "CD9", "CADM1", "APOE"),
         "APOE_Myeloid" = c("APOE", "ENPP3", "CD9"),
         "Eryth" = c("HBB", "GYPA", "ALAS2")
@@ -322,42 +321,84 @@ myeloid_annotate <- function(sc_mye_clust) {
             mutate(across(where(is.numeric), ~ round(.x, 2))),
         "results/107.myeloid/myeloid_annotate_expression.tsv"
     )
+    # DC_markers <- list(
+    #     # From the figure showing dendritic cell subsets
+    #     "pDC" = c("CCR7", "PTPRC", "CD209", "CLEC4C", "LILRB4", "NRP1", "IFNG"),
+    #     "cDC1" = c("BTLA", "CADM1", "CD8A", "CLEC9A", "ITGAE", "ITGAX", "LY75", "THBD", "XCR1"),
+    #     "cDC2" = c("CD14", "CD163", "CLEC10A", "NOTCH2", "ITGAM", "SIRPA", "CX3CR1", "CD1C", "CD2"),
+    #     "mo-DC" = c("CD14", "CD1A", "CD1C", "CD209", "FCER1A", "ITGAM", "MRC1", "SIRPA"),
+    #     "LC" = c("CD1A", "CD207", "ID2"),
+
+    #     # Transcription factors from the figure
+    #     "pDC_TF" = c("IRF4", "IRF7", "IRF8"),
+    #     "cDC1_TF" = c("BATF3", "ID2", "IRF8", "ZBTB46"),
+    #     "cDC2_TF" = c("ID2", "IRF4", "KLF4", "ZBTB46"),
+    #     "mo-DC_TF" = c("IRF4", "KLF4", "ZBTB46")
+    # )
+    # # Filter for only cDC1 and cDC2 cell types
+    # sc_mye_dc <- sc_mye_clust %>%
+    #     filter(cell_type_dtl %in% c("Neutrophil", "cDC2"))
+    # # Create separate plots for each category
+    # plot_list <- list()
+
+    # for (category in names(DC_markers)) {
+    #     p_cat <- VlnPlot2(sc_mye_dc,
+    #         features = DC_markers[[category]],
+    #         group.by = "cell_type_dtl",
+    #         ncol = length(DC_markers[[category]])
+    #     ) +
+    #         ggtitle(category) +
+    #         theme(plot.background = element_rect(fill = "white"))
+
+    #     plot_list[[category]] <- p_cat
+    # }
+
+    # # Combine plots using patchwork
+    # combined_plot <- wrap_plots(plot_list, ncol = 1)
+
+    # ggsave("results/107.myeloid/DC_markers_violin.png", combined_plot, width = 16, height = 20)
     markers <- list(
-        # Tissue-resident & specialized macrophages
-        "LYVE1_Mac" = c("LYVE1", "CD163", "MRC1", "FOLR2"), # Removed MRC1L1 (non-human ortholog)
-        "Kupffer_like" = c("CLEC4F", "ID1"),
-        "Microglia_like" = c("P2RY12", "TMEM119"),
-        "Alveolar_Mac" = c("MARCO", "PPARG"),
 
-        # Monocytes
-        "Classical_Mono" = c("CD14", "VCAN", "CCR2", "LYZ", "S100A8", "S100A9"),
-        "NonClassical_Mono" = c("FCGR3A", "CX3CR1", "LST1", "MS4A7", "NR4A1"),
+        # --- Pan-Myeloid Considerations ---
+        "Pan_Myeloid" = c("PTPRC", "CD68", "ITGAM", "CSF1R"),
 
-        # Inflammatory/activated macrophages
-        "Mac_M1" = c("CD80", "CD86", "STAT1", "IL1B", "CXCL10", "HLA-DRA", "NOS2", "IL6", "IL12B"),
-        "Mac_M2" = c("CD163", "MRC1", "FOLR2", "CCL18", "MAFB"),
+        # --- Tissue-Resident & Specialized Macrophages ---
+        "LYVE1_Mac" = c("LYVE1", "CD163", "MRC1", "FOLR2", "TIMD4"),
+        "Kupffer_like_Mac" = c("CLEC4F", "CD5L", "MARCO", "ID1", "VSIG4"),
+        "Microglia_like" = c("P2RY12", "TMEM119", "CX3CR1", "CSF1R", "HEXB", "SLC2A5", "C1QA"),
+        "Alveolar_Mac" = c("MARCO", "PPARG", "FABP4", "ITGAX", "SIGLEC1"),
 
-        # Lipid-associated macrophages / foam cells
-        "Mac_LAM" = c("TREM2", "APOE", "LPL", "FABP4"),
-        "Foam_Cell" = c("CD36", "MSR1", "PLIN2", "ADRP"),
+        # --- Monocytes ---
+        "Classical_Mono" = c("CD14", "VCAN", "CCR2", "LYZ", "S100A8", "S100A9", "FCN1", "SELL"),
+        "NonClassical_Mono" = c("FCGR3A", "CX3CR1", "MS4A7", "NR4A1", "CDKN1C", "LILRB2"),
 
-        # Erythroid lineage (exclude these if only immune focus)
-        "Eryth" = c("HBB", "GYPA", "SLC4A1", "ALAS2"),
+        # --- Inflammatory/Activated Macrophage States ---
+        "Mac_M1_like" = c("CD80", "CD86", "STAT1", "IL1B", "CXCL9", "CXCL10", "HLA-DRA", "NOS2", "TNF", "IRF5", "SOCS3"),
+        "Mac_M2_like" = c("CD163", "MRC1", "FOLR2", "CCL18", "ARG1", "IL4R", "STAT6", "MAFB", "TGFB1", "CD209"),
 
-        # Granulocytes
-        "Neutrophil" = c("CSF3R", "CEACAM8", "CXCR2", "LCN2", "MPO"),
-        "Eosinophil" = c("CLC", "PRG2", "IL5RA", "EPX", "ALOX15"),
-        "Mast" = c("KIT", "TPSAB1", "CMA1", "CPA3"),
+        # --- Lipid-Associated Macrophages (LAM) / Foam Cells ---
+        "Mac_LAM_Foam" = c("TREM2", "APOE", "LPL", "FABP4", "CD36", "MSR1", "PLIN2", "SPP1", "GPNMB", "CD9", "LGALS3"),
 
-        # Dendritic cells
-        "cDC1" = c("CLEC9A", "XCR1", "BATF3", "IRF8"),
-        "cDC2" = c("CD1C", "FCER1A", "IRF4", "ITGAX"),
-        "mo_DC" = c("CD1C", "FCGR3A", "CCR7", "CD80", "CD86", "LAMP3"),
+        # --- Dendritic Cells ---
+        "cDC1" = c("CLEC9A", "XCR1", "BATF3", "IRF8", "THBD"),
+        "cDC2" = c("CD1C", "SIRPA", "CLEC10A", "FCER1A", "IRF4", "HLA-DQA1", "CD2"),
+        "pDC" = c("CLEC4C", "NRP1", "IL3RA", "TCF4", "LILRA4", "GZMB", "IRF7"),
+        "mo_DC" = c("CD14", "S100A8", "S100A9", "ITGAM", "CD1C", "FCGR3A", "CD209", "CCR7", "CD80", "CD86", "LAMP3", "HLA-DRA", "ZNF366"),
 
-        # Activation / proliferation
-        "Activation" = c("CD83", "CD40", "LAMP1"),
-        "Proliferation" = c("MKI67", "TOP2A", "CENPF")
+        # --- Granulocytes ---
+        "Neutrophil" = c("CSF3R", "FCGR3B", "CEACAM8", "CXCR2", "MPO", "ELANE", "PRTN3"),
+        "Eosinophil" = c("SIGLEC8", "CLC", "PRG2", "IL5RA", "EPX", "RNASE2", "RNASE3"),
+        "Basophil" = c("ENPP3", "FCER1A", "CCR3", "IL3RA", "GATA2", "MS4A2", "ARHGEF25", "CLC"),
+        "Mast" = c("KIT", "TPSAB1", "CMA1", "CPA3", "FCER1A", "MS4A2", "HPGDS"),
+
+        # --- Erythroid Lineage (for exclusion) ---
+        "Erythroid" = c("HBB", "HBA1", "GYPA", "SLC4A1", "ALAS2"),
+
+        # --- General Cell State Markers ---
+        "Activation_Maturation" = c("CD83", "CD40", "LAMP1", "PDCD1LG1", "ICOSLG", "RELB"),
+        "Proliferation" = c("MKI67", "TOP2A", "PCNA", "CENPF")
     )
+
     toplot <- CalcStats(sc_mye_clust,
         features = markers %>% unlist(),
         method = "zscore", order = "value", group.by = "cell_type_dtl"
@@ -407,26 +448,29 @@ myeloid_DEG_vs_cluster <- function(sc_mye, myeloid_cluster) {
         rownames_to_column("gene") %>%
         as_tibble() %>%
         filter(p_val_adj < 0.05) %>%
-        filter((avg_log2FC > 0 & pct.1 > 0.2) | (avg_log2FC < 0 & pct.2 > 0.2)) %>%
+        # filter((avg_log2FC > 0 & pct.1 > 0.1) | (avg_log2FC < 0 & pct.2 > 0.1)) %>%
         arrange(desc(abs(avg_log2FC)))
-    if (nrow(deg) == 0) {
-        myeloid_cluster <- sub("-([^-]*)$", "_\\1", myeloid_cluster)
-        Idents(sc_mye) <- "cell_type_dtl"
-        deg <- FindMarkers(
-            sc_mye,
-            ident.1 = myeloid_cluster,
-            test.use = "MAST",
-            min.cells.group = 2
-        ) %>%
-            rownames_to_column("gene") %>%
-            as_tibble() %>%
-            filter(p_val_adj < 0.05) %>%
-            filter((avg_log2FC > 0 & pct.1 > 0.2) | (avg_log2FC < 0 & pct.2 > 0.2)) %>%
-            arrange(desc(abs(avg_log2FC)))
-    }
 
     write_tsv(deg, sprintf(
-        "results/107.myeloid/myeloid_DEG/%s_vs_rest_DEG.tsv",
+        "results/107.myeloid/myeloid_DEG/%s_vs_rest_DEG_pseudobulk.tsv",
+        myeloid_cluster
+    ))
+    myeloid_cluster <- sub("-([^-]*)$", "_\\1", myeloid_cluster)
+    Idents(sc_mye) <- "cell_type_dtl"
+    deg <- FindMarkers(
+        sc_mye,
+        ident.1 = myeloid_cluster,
+        test.use = "MAST",
+        min.cells.group = 2
+    ) %>%
+        rownames_to_column("gene") %>%
+        as_tibble() %>%
+        filter(p_val_adj < 0.05) %>%
+        # filter((avg_log2FC > 0 & pct.1 > 0.2) | (avg_log2FC < 0 & pct.2 > 0.2)) %>%
+        arrange(desc(abs(avg_log2FC)))
+
+    write_tsv(deg, sprintf(
+        "results/107.myeloid/myeloid_DEG/%s_vs_rest_DEG_MAST.tsv",
         myeloid_cluster
     ))
     "results/107.myeloid/myeloid_DEG"

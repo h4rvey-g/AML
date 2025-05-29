@@ -297,7 +297,9 @@ paper_myeloid_lipid_DEG <- function(sc_mye) {
 paper_macrophage_markers_check <- function(sc_mye) {
     # Create output directory
     dir.create("results/109.paper/Fig3", showWarnings = FALSE, recursive = TRUE)
-
+    # Remove "Mixed" cells from the dataset before analysis
+    sc_mye <- sc_mye %>% 
+        subset(cell_type_dtl != "Mixed")
     # Define key myeloid markers to check
     macrophage_markers <- c(
         "CD68", # Pan-macrophage marker
@@ -307,8 +309,11 @@ paper_macrophage_markers_check <- function(sc_mye) {
         "MRC1", # CD206, M2 macrophage marker
         "CD163", # M2 macrophage marker
         "FCGR3A", # CD16, myeloid marker
+        "MPO", # Myeloperoxidase, neutrophil marker
         "TREM2", # TREM2 (key for TREM2_LAM)
-        "APOE" # APOE (key for APOE_LAM)
+        "APOE", # APOE (key for APOE_LAM)
+        "ITGA2B", 
+        "ITGB3"
     )
 
     # Generate violin plots for each marker
